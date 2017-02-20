@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.0.1
+  OpenGL Function Loader (GLFL) v1.0.2
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -962,7 +962,7 @@ class glfl
     struct context
     {
         function_loader_t function_loader = 0;
-        void *ptrs[3164];
+        void *ptrs[3164] {};
 
         ~context()
         {

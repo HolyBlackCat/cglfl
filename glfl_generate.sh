@@ -1,4 +1,4 @@
-#  OpenGL Function Loader (GLFL) v1.0.1 (generator script)
+#  OpenGL Function Loader (GLFL) v1.0.2 (generator script)
 #  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 #
 #  This software is provided '"'"'as-is'"'"', without any express or implied
@@ -282,7 +282,7 @@ echo >>out/GLFL/glfl.h \
     struct context
     {
         function_loader_t function_loader = 0;'
-echo >>out/GLFL/glfl.h -e "        void *ptrs["`echo '.' | cat out/functions - | grep -Pc '^.' -`"];"
+echo >>out/GLFL/glfl.h -e "        void *ptrs["`echo '.' | cat out/functions - | grep -Pc '^.' -`"] {};"
 echo >>out/GLFL/glfl.h \
 '
         ~context()
@@ -636,7 +636,7 @@ perl -pi -e 's|<<gl([^>]*)>>|    GLFL_LOAD_FUNCTION(\1);\n|g' out/glfl.cpp
 # License
 cd out
 find -regextype posix-extended -regex '.*\.(h|cpp)' -exec perl -pi -e 's|___LICENSE_TEXT_HERE___|/*
-  OpenGL Function Loader (GLFL) v1.0.1
+  OpenGL Function Loader (GLFL) v1.0.2
   Copyright (C) 2017 Egor Mikhailov <blckcat\@inbox.ru>
 
   This software is provided '"'"'as-is'"'"', without any express or implied
