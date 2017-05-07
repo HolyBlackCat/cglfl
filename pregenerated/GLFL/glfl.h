@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.0.3
+  OpenGL Function Loader (GLFL) v1.1
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -161,37 +161,26 @@ class glfl
     static void load_glsc(int major, int minor);
     static void load_glsc() {load_glsc(-1,-1);}
 
-    /* Set a callback for logging.
+    /* This variable is incremented each time a GL function is called (if default proxy is enabled).
+     * Before the first call it's equal to 0. Feel free to reset it if you need. */
+    static unsigned long long draw_calls;
+    /* Callback for logging.
      * Has no effect when proxy functions are disabled. */
     using logging_function_t = void (*)(const char *);
-    static logging_function_t &logging_function()
-    {
-        #ifdef GLFL_ENABLE_PROXY
-        static logging_function_t func = [](const char *p){std::cout << p << '\n';};
-        #else
-        static logging_function_t func = 0;
-        #endif
-        return func;
-    }
-    /* Makes default proxy call glGetError() after every function call. */
-    static bool &check_errors()
-    {
-        static bool value = 0;
-        return value;
-    }
-    /* If error checking is enabled, terminates the program after a first error. */
-    static bool &terminate_on_error()
-    {
-        static bool value = 0;
-        return value;
-    }
-    /* When enabled, const char pointers will be dereferenced when logging. May cause UB if OpenGL functions are used with unterminated strings.
+    static logging_function_t logging_function; // [](const char *p){std::cout << p << '\n';} by default.
+    /* Makes default proxy call glGetError() after every function call.
      * Has no effect when proxy functions are disabled. */
-    static bool &dereference_const_char_pointers()
-    {
-        static bool value = 0;
-        return value;
-    }
+    static bool check_errors; // 0 by default.
+    /* Terminates the program after the first error (if check_errors == 1) or when used function wasn't loaded.
+     * Has no effect when proxy functions are disabled. */
+    static bool terminate_on_error; // 0 by default.
+    /* Enables printing of `const char *` parameters as strings instead of pointers. May result in a crash if bad or unterminated pointers are used.
+     * Has no effect when proxy functions are disabled. */
+    static bool print_strings; // 0 by default.
+    /* Temporarily disable logging.
+     * When proxy functions are disabled, logging can't be enabled and this variable has no effect. */
+    static bool disable_logging; // 0 by deafult.
+
     /* Get information about a function. */
     struct func_info
     {

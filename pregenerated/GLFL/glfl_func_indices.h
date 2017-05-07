@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.0.3
+  OpenGL Function Loader (GLFL) v1.1
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied

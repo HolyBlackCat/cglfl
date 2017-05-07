@@ -1,4 +1,4 @@
-#  OpenGL Function Loader (GLFL) v1.0.3 (generator script)
+#  OpenGL Function Loader (GLFL) v1.1 (generator script)
 #  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 #
 #  This software is provided '"'"'as-is'"'"', without any express or implied
@@ -234,37 +234,26 @@ class glfl
 grep -Po '<#[^;]*;' out/versions | uniq | perl -p -e 's|<#([^;]*);|    static void load_\1(int major, int minor);\n    static void load_\1() {load_\1(-1,-1);}|g' - >>out/GLFL/glfl.h
 echo >>out/GLFL/glfl.h \
 "
-    /* Set a callback for logging.
+    /* This variable is incremented each time a GL function is called (if default proxy is enabled).
+     * Before the first call it's equal to 0. Feel free to reset it if you need. */
+    static unsigned long long draw_calls;
+    /* Callback for logging.
      * Has no effect when proxy functions are disabled. */
     using logging_function_t = void (*)(const char *);
-    static logging_function_t &logging_function()
-    {
-        #ifdef GLFL_ENABLE_PROXY
-        static logging_function_t func = [](const char *p){std::cout << p << '\n';};
-        #else
-        static logging_function_t func = 0;
-        #endif
-        return func;
-    }
-    /* Makes default proxy call glGetError() after every function call. */
-    static bool &check_errors()
-    {
-        static bool value = 0;
-        return value;
-    }
-    /* If error checking is enabled, terminates the program after a first error. */
-    static bool &terminate_on_error()
-    {
-        static bool value = 0;
-        return value;
-    }
-    /* When enabled, const char pointers will be dereferenced when logging. May cause UB if OpenGL functions are used with unterminated strings.
+    static logging_function_t logging_function; // [](const char *p){std::cout << p << '\n';} by default.
+    /* Makes default proxy call glGetError() after every function call.
      * Has no effect when proxy functions are disabled. */
-    static bool &dereference_const_char_pointers()
-    {
-        static bool value = 0;
-        return value;
-    }
+    static bool check_errors; // 0 by default.
+    /* Terminates the program after the first error (if check_errors == 1) or when used function wasn't loaded.
+     * Has no effect when proxy functions are disabled. */
+    static bool terminate_on_error; // 0 by default.
+    /* Enables printing of \`const char *\` parameters as strings instead of pointers. May result in a crash if bad or unterminated pointers are used.
+     * Has no effect when proxy functions are disabled. */
+    static bool print_strings; // 0 by default.
+    /* Temporarily disable logging.
+     * When proxy functions are disabled, logging can't be enabled and this variable has no effect. */
+    static bool disable_logging; // 0 by deafult.
+
     /* Get information about a function. */
     struct func_info
     {
@@ -340,27 +329,16 @@ echo >out/GLFL/glfl_proxy_proto__.h \
 
 namespace glfl_proxy
 {
-    inline int &line()
-    {
-        static int value = 0;
-        return value;
-    }
-    inline const char *&file()
-    {
-        static const char *value = "";
-        return value;
-    }
+    // You shouldn'"'"'t touch these unless you'"'"'re trying to implement custom proxy functions.
 
-    inline int &prev_line()
-    {
-        static int value = 0;
-        return value;
-    }
-    inline std::string &prev_file()
-    {
-        static std::string value = "";
-        return value;
-    }
+    extern int line, prev_line;
+    extern const char *file;
+    extern std::string prev_file;
+
+    extern bool prev_check_errors;
+    extern bool prev_terminate_on_error;
+    extern bool prev_print_strings;
+    extern bool prev_disable_logging;
 
     template <typename T> std::enable_if_t<std::is_arithmetic<T>::value, std::string> to_string(T obj)
     {
@@ -381,7 +359,7 @@ namespace glfl_proxy
     }
     inline std::string to_string(const char *obj)
     {
-        if (::glfl::dereference_const_char_pointers())
+        if (::glfl::print_strings)
             return std::string("\"") + obj + "\"";
         else
             return to_string<void *>((void *) obj);
@@ -444,9 +422,23 @@ namespace glfl_proxy
             if (::glfl::active_context()->ptrs[Index] && ::glfl::active_context()->ptrs[Index] != ::glfl::active_context()->ptrs[0])
                 ret = ((ReturnType (GLFL_API *)(ParamTypes...))::glfl::active_context()->ptrs[Index])(args...);
             else
+            {
+                if (::glfl::terminate_on_error)
+                {
+                    if (::glfl::disable_logging)
+                    {
+                        ::glfl::logging_function("");
+                        ::glfl::logging_function((std::string("Function ") + ::glfl::get_func_info(Index).name + " not loaded.").c_str());
+                    }
+                    ::glfl::logging_function("");
+                    ::glfl::logging_function("#### Stop");
+                    std::exit(0);
+                }
                 ret = 0;
+            }
 
-            ::glfl::logging_function()(("         -> " + (::glfl::active_context()->ptrs[Index] ? to_string(ret, ::glfl::get_func_info(Index).rtag) : "<?>")).c_str());
+            if (!::glfl::disable_logging)
+                ::glfl::logging_function(("         -> " + (::glfl::active_context()->ptrs[Index] ? to_string(ret, ::glfl::get_func_info(Index).rtag) : "<?>")).c_str());
 
             default_proxy<Index, void, ParamTypes...>::call_end();
 
@@ -462,37 +454,108 @@ namespace glfl_proxy
 
             if (::glfl::active_context()->ptrs[Index] && ::glfl::active_context()->ptrs[Index] != ::glfl::active_context()->ptrs[0])
                 ((void (GLFL_API *)(ParamTypes...))::glfl::active_context()->ptrs[Index])(args...);
+            else if (::glfl::terminate_on_error)
+            {
+                if (::glfl::disable_logging)
+                {
+                    ::glfl::logging_function("");
+                    ::glfl::logging_function((std::string("Function ") + ::glfl::get_func_info(Index).name + " not loaded.").c_str());
+                }
+                ::glfl::logging_function("");
+                ::glfl::logging_function("#### Stop");
+                std::exit(0);
+            }
 
             default_proxy<Index, void, ParamTypes...>::call_end();
         }
 
         static void call_start(ParamTypes ... args)
         {
-            if (file() != prev_file())
+            bool blank_like_added = 0;
+            if (prev_disable_logging != ::glfl::disable_logging)
             {
-                if (prev_file() != "")
-                    ::glfl::logging_function()("");
-                ::glfl::logging_function()(file());
-                ::glfl::logging_function()("");
-                prev_file() = file();
-                prev_line() = 0;
+                if (::glfl::disable_logging)
+                {
+                    ::glfl::logging_function("");
+                    ::glfl::logging_function("...");
+                }
+                else
+                {
+                    ::glfl::logging_function("");
+                    ::glfl::logging_function(std::string(70, '"'"'-'"'"').c_str());
+                    ::glfl::logging_function("");
+                    blank_like_added = 1;
+                    prev_line = 0;
+                    prev_file = "";
+                }
+                prev_disable_logging = ::glfl::disable_logging;
             }
-            if (line() != prev_line())
+            if (::glfl::disable_logging)
+                return;
+            bool options_changed = 0;
+            if (prev_check_errors != ::glfl::check_errors)
             {
-                prev_line() = line();
-                ::glfl::logging_function()(std::to_string(line()).c_str());
+                if (!blank_like_added)
+                {
+                    blank_like_added = 1;
+                    ::glfl::logging_function("");
+                }
+                options_changed = 1;
+                ::glfl::logging_function((std::string("#### check_errors = ") + (::glfl::check_errors ? "true" : "false")).c_str());
+                prev_check_errors = ::glfl::check_errors;
+            }
+            if (prev_terminate_on_error != ::glfl::terminate_on_error)
+            {
+                if (!blank_like_added)
+                {
+                    blank_like_added = 1;
+                    ::glfl::logging_function("");
+                }
+                options_changed = 1;
+                ::glfl::logging_function((std::string("#### terminate_on_error = ") + (::glfl::terminate_on_error ? "true" : "false")).c_str());
+                prev_terminate_on_error = ::glfl::terminate_on_error;
+            }
+            if (prev_print_strings != ::glfl::print_strings)
+            {
+                if (!blank_like_added)
+                {
+                    blank_like_added = 1;
+                    ::glfl::logging_function("");
+                }
+                options_changed = 1;
+                ::glfl::logging_function((std::string("#### print_strings = ") + (::glfl::print_strings ? "true" : "false")).c_str());
+                prev_print_strings = ::glfl::print_strings;
+            }
+            if (options_changed)
+                ::glfl::logging_function("");
+
+            if (file != prev_file)
+            {
+                if (prev_file != "" && !options_changed)
+                    ::glfl::logging_function("");
+                ::glfl::logging_function(file);
+                ::glfl::logging_function("");
+                prev_file = file;
+                prev_line = 0;
+            }
+            if (line != prev_line)
+            {
+                prev_line = line;
+                ::glfl::logging_function(std::to_string(line).c_str());
             }
             else
-                ::glfl::logging_function()("");
-            ::glfl::logging_function()((std::string("    ") + (::glfl::active_context()->ptrs[Index] ? "" : "<< NOT LOADED >>  ") + ::glfl::get_func_info(Index).name + (::glfl::get_func_info(Index).pnames[0][0] ? " (...)" : " ()")).c_str());
+                ::glfl::logging_function("");
+            ::glfl::logging_function((std::string("    ") + (::glfl::active_context()->ptrs[Index] ? "" : "<< NOT LOADED >>  ") + ::glfl::get_func_info(Index).name + (::glfl::get_func_info(Index).pnames[0][0] ? " (...)" : " ()")).c_str());
             using dummy_array = int[];
             int index = 0;
-            dummy_array{0, (::glfl::logging_function()((std::string("        ") + ::glfl::get_func_info(Index).pnames[index] + " = " + to_string(args, ::glfl::get_func_info(Index).ptags[index])).c_str()), index++, 0)...};
+            dummy_array{0, (::glfl::logging_function((std::string("        ") + ::glfl::get_func_info(Index).pnames[index] + " = " + to_string(args, ::glfl::get_func_info(Index).ptags[index])).c_str()), index++, 0)...};
         }
 
         static void call_end()
         {
-            if (::glfl::check_errors() && Index != ::glfl::index_of_glGetError)
+            ::glfl::draw_calls++;
+
+            if (::glfl::check_errors && Index != ::glfl::index_of_glGetError)
             {
                 GLenum tmp;
                 std::string str;
@@ -514,11 +577,15 @@ namespace glfl_proxy
                 }
                 if (str.size())
                 {
-                    ::glfl::logging_function()("");
-                    ::glfl::logging_function()("<< ERROR >>");
-                    ::glfl::logging_function()(str.c_str());
-                    if (::glfl::terminate_on_error())
+                    ::glfl::logging_function("");
+                    ::glfl::logging_function("<< ERROR >>");
+                    ::glfl::logging_function(str.c_str());
+                    if (::glfl::terminate_on_error)
+                    {
+                        ::glfl::logging_function("");
+                        ::glfl::logging_function("#### Stop");
                         std::exit(0);
+                    }
                 }
             }
         }
@@ -526,7 +593,7 @@ namespace glfl_proxy
 }
 '
 cat -n out/functions | \
-perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);gl([^#]*)#><@([^@]*)@>|#define gl\3                                                                     =(void(0), ::glfl_proxy::file() = __FILE__, ::glfl_proxy::line() = __LINE__, GLFL_PROXY_NAME<\1,\2,\4>::func)|g' | \
+perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);gl([^#]*)#><@([^@]*)@>|#define gl\3                                                                     =(void(0), ::glfl_proxy::file = __FILE__, ::glfl_proxy::line = __LINE__, GLFL_PROXY_NAME<\1,\2,\4>::func)|g' | \
 perl -pe 's|(#[0-9A-Za-z_(), ]{0,64})([0-9A-Za-z_(),]*) *=(.*)$|\1\2 \3|g' | perl -pe 's|<<([^;]*);[^;]*;([^>]*)>>|\1\2|g' | perl -pe 's|,>|>|g' >>out/GLFL/glfl_proxy_proto__.h
 
 
@@ -559,8 +626,30 @@ echo >out/glfl.cpp \
 #include "GLFL/glfl.h"
 #include "GLFL/glfl_func_indices.h"
 
+#include <iostream>
 
 glfl::context *glfl::current_context = 0, *glfl::default_context = 0;
+
+glfl::logging_function_t glfl::logging_function = [](const char *p){std::cout << p << '"'"'\n'"'"';};
+
+unsigned long long glfl::draw_calls = 0;
+
+bool glfl::check_errors = 0;
+bool glfl::terminate_on_error = 0;
+bool glfl::print_strings = 0;
+bool glfl::disable_logging = 0;
+
+namespace glfl_proxy
+{
+    int line = 0, prev_line = 0;
+    const char *file = "";
+    std::string prev_file = "";
+
+    bool prev_check_errors = 0;
+    bool prev_terminate_on_error = 0;
+    bool prev_print_strings = 0;
+    bool prev_disable_logging = 0;
+}
 
 void glfl::set_active_context(context *c)
 {
@@ -650,7 +739,7 @@ echo >>out/glfl.cpp '    };
 # License
 cd out
 find -regextype posix-extended -regex '.*\.(h|cpp)' -exec perl -pi -e 's|___LICENSE_TEXT_HERE___|/*
-  OpenGL Function Loader (GLFL) v1.0.3
+  OpenGL Function Loader (GLFL) v1.1
   Copyright (C) 2017 Egor Mikhailov <blckcat\@inbox.ru>
 
   This software is provided '"'"'as-is'"'"', without any express or implied

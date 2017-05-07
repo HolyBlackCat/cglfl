@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.0.3
+  OpenGL Function Loader (GLFL) v1.1
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -22,8 +22,30 @@
 #include "GLFL/glfl.h"
 #include "GLFL/glfl_func_indices.h"
 
+#include <iostream>
 
 glfl::context *glfl::current_context = 0, *glfl::default_context = 0;
+
+glfl::logging_function_t glfl::logging_function = [](const char *p){std::cout << p << '\n';};
+
+unsigned long long glfl::draw_calls = 0;
+
+bool glfl::check_errors = 0;
+bool glfl::terminate_on_error = 0;
+bool glfl::print_strings = 0;
+bool glfl::disable_logging = 0;
+
+namespace glfl_proxy
+{
+    int line = 0, prev_line = 0;
+    const char *file = "";
+    std::string prev_file = "";
+
+    bool prev_check_errors = 0;
+    bool prev_terminate_on_error = 0;
+    bool prev_print_strings = 0;
+    bool prev_disable_logging = 0;
+}
 
 void glfl::set_active_context(context *c)
 {
