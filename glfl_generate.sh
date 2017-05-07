@@ -1,4 +1,4 @@
-#  OpenGL Function Loader (GLFL) v1.0.2 (generator script)
+#  OpenGL Function Loader (GLFL) v1.0.3 (generator script)
 #  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 #
 #  This software is provided '"'"'as-is'"'"', without any express or implied
@@ -265,6 +265,15 @@ echo >>out/GLFL/glfl.h \
         static bool value = 0;
         return value;
     }
+    /* Get information about a function. */
+    struct func_info
+    {
+        const char *name;    // Function name.
+        const char *const *pnames; // Parameter names. If no parameters, contains a single empty string.
+        const char rtag;     // Return type tag: 'E' = enum, 'B' = bool, 'F' = bitfield, '.' = other.
+        const char *ptags;   // Parameter type tags (same as above).
+    };
+    static const func_info &get_func_info(int index);
 
     /* This is the index of glGetError() in the internal array of pointers.
      * It's useful for performing error checks inside of a call hook without incuding heavy \`glfl_func_indices.h\`. */
@@ -423,38 +432,38 @@ namespace glfl_proxy
         }
     }
 
-    template <int Index, typename Info, typename ReturnType, typename ...ParamTypes>
+    template <int Index, typename ReturnType, typename ...ParamTypes>
     struct default_proxy
     {
         static ReturnType GLFL_API func(ParamTypes ... args)
         {
             ReturnType ret;
 
-            default_proxy<Index, Info, void, ParamTypes...>::call_start(args...);
+            default_proxy<Index, void, ParamTypes...>::call_start(args...);
 
             if (::glfl::active_context()->ptrs[Index] && ::glfl::active_context()->ptrs[Index] != ::glfl::active_context()->ptrs[0])
                 ret = ((ReturnType (GLFL_API *)(ParamTypes...))::glfl::active_context()->ptrs[Index])(args...);
             else
                 ret = 0;
 
-            ::glfl::logging_function()(("         -> " + (::glfl::active_context()->ptrs[Index] ? to_string(ret, Info::rtag) : "<?>")).c_str());
+            ::glfl::logging_function()(("         -> " + (::glfl::active_context()->ptrs[Index] ? to_string(ret, ::glfl::get_func_info(Index).rtag) : "<?>")).c_str());
 
-            default_proxy<Index, Info, void, ParamTypes...>::call_end();
+            default_proxy<Index, void, ParamTypes...>::call_end();
 
             return ret;
         }
     };
-    template <int Index, typename Info, typename ...ParamTypes>
-    struct default_proxy<Index, Info, void, ParamTypes...>
+    template <int Index, typename ...ParamTypes>
+    struct default_proxy<Index, void, ParamTypes...>
     {
         static void GLFL_API func(ParamTypes ... args)
         {
-            default_proxy<Index, Info, void, ParamTypes...>::call_start(args...);
+            default_proxy<Index, void, ParamTypes...>::call_start(args...);
 
             if (::glfl::active_context()->ptrs[Index] && ::glfl::active_context()->ptrs[Index] != ::glfl::active_context()->ptrs[0])
                 ((void (GLFL_API *)(ParamTypes...))::glfl::active_context()->ptrs[Index])(args...);
 
-            default_proxy<Index, Info, void, ParamTypes...>::call_end();
+            default_proxy<Index, void, ParamTypes...>::call_end();
         }
 
         static void call_start(ParamTypes ... args)
@@ -475,10 +484,10 @@ namespace glfl_proxy
             }
             else
                 ::glfl::logging_function()("");
-            ::glfl::logging_function()((std::string("    ") + (::glfl::active_context()->ptrs[Index] ? "" : "<< NOT LOADED >>  ") + Info::name + (std::is_array<decltype(Info::pnames)>::value ? " (...)" : " ()")).c_str());
+            ::glfl::logging_function()((std::string("    ") + (::glfl::active_context()->ptrs[Index] ? "" : "<< NOT LOADED >>  ") + ::glfl::get_func_info(Index).name + (::glfl::get_func_info(Index).pnames[0][0] ? " (...)" : " ()")).c_str());
             using dummy_array = int[];
             int index = 0;
-            dummy_array{0, (::glfl::logging_function()((std::string("        ") + Info::pnames[index] + " = " + to_string(args, Info::ptags[index])).c_str()), index++, 0)...};
+            dummy_array{0, (::glfl::logging_function()((std::string("        ") + ::glfl::get_func_info(Index).pnames[index] + " = " + to_string(args, ::glfl::get_func_info(Index).ptags[index])).c_str()), index++, 0)...};
         }
 
         static void call_end()
@@ -514,20 +523,10 @@ namespace glfl_proxy
             }
         }
     };
-
-    // E = enum, B = bool, F = bitfield, . = other
-'
-cat -n out/functions | perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);gl([^#]*)#><@([^@]*)@>|    struct \3<##lf##>    {<##lf##>        static constexpr const char *name = "gl\3";<##lf##>        static constexpr const char *pnames[] {\4};<##lf##>|g' - | perl -pe 's|<<[^;]*;([^;]*);[^>]*>>|"\1"|g' >out/1.tmp
-perl -pe "s|<#([^;]*);[^#]*#><@([^@]*)@>|        static constexpr char rtag = '<<\1;;>>';<##lf##>        static constexpr const char *ptags = \"\2\";<##lf##>    };|g" out/functions | perl -pe 's|>>,<<|>><<|g' | perl -pe 's|<<([^;]*);[^;]*;([^>]*)>>|<<\1\2>>|g' | \
-perl -pe 's|<<GLenum>>|E|g' | perl -pe 's|<<GLbitfield>>|F|g' | \
-perl -pe 's|<<GLboolean>>|B|g' | perl -pe 's|<<[^>]*>>|.|g' >out/2.tmp
-paste -d '' out/1.tmp out/2.tmp | perl -pe 's|<##lf##>|\n|g' | \
-perl -pe 's|(static constexpr const char) \*pnames\[\] \{\};|\1 **pnames = 0;|g' >>out/GLFL/glfl_proxy_proto__.h
-rm -f out/*.tmp
-echo >>out/GLFL/glfl_proxy_proto__.h '}
+}
 '
 cat -n out/functions | \
-perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);gl([^#]*)#><@([^@]*)@>|#define gl\3                                                                     =(void(0), ::glfl_proxy::file() = __FILE__, ::glfl_proxy::line() = __LINE__, GLFL_PROXY_NAME<\1,::glfl_proxy::\3,\2,\4>::func)|g' | \
+perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);gl([^#]*)#><@([^@]*)@>|#define gl\3                                                                     =(void(0), ::glfl_proxy::file() = __FILE__, ::glfl_proxy::line() = __LINE__, GLFL_PROXY_NAME<\1,\2,\4>::func)|g' | \
 perl -pe 's|(#[0-9A-Za-z_(), ]{0,64})([0-9A-Za-z_(),]*) *=(.*)$|\1\2 \3|g' | perl -pe 's|<<([^;]*);[^;]*;([^>]*)>>|\1\2|g' | perl -pe 's|,>|>|g' >>out/GLFL/glfl_proxy_proto__.h
 
 
@@ -632,11 +631,26 @@ perl -pi -e 's|<#([^;]*);[^#]*#><@([^@]*)@>|void glfl::load_extension_\1()\n{\n\
 perl -pi -e 's|>>,<<|>><<|g' out/glfl.cpp
 perl -pi -e 's|<<gl([^>]*)>>|    GLFL_LOAD_FUNCTION(\1);\n|g' out/glfl.cpp
 
+echo >>out/glfl.cpp '
+const glfl::func_info &glfl::get_func_info(int index)
+{
+    static constexpr const char *pnames0[] {""};'
+cat -n out/functions | perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);([^#]*)#><@([^@]*)@>|    static constexpr const char *pnames\1\[\] {\4};|g' | \
+perl -pe 's|<<[^;]*;([^;]*);[^>]*>>|"\1"|g' | perl -pe 's|\[\] \{\};|[] {""};|g' | perl -pe 's|","|", "|g' >>out/glfl.cpp
+echo >>out/glfl.cpp '    static constexpr glfl::func_info ret[]
+    {
+        {"<0>", pnames0, '"'"'.'"'"', ""},'
+cat -n out/functions | perl -pe 's|[\t ]*([0-9]*)[\t ]*<#([^;]*);([^#]*)#><@([^@]*)@>|        {"\3", pnames\1, '"'"'<<\2;;>>'"'"', "\4"},|g' | perl -pe 's|>>,<<|>><<|g' | \
+perl -pe 's|<<GLenum;[^;]*;>>|E|g' | perl -pe 's|<<GLbitfield;[^;]*;>>|F|g' | perl -pe 's|<<GLboolean;[^;]*;>>|B|g' | perl -pe 's|<<[^>]*>>|.|g' >>out/glfl.cpp
+echo >>out/glfl.cpp '    };
+    return ret[index];
+}'
+
 
 # License
 cd out
 find -regextype posix-extended -regex '.*\.(h|cpp)' -exec perl -pi -e 's|___LICENSE_TEXT_HERE___|/*
-  OpenGL Function Loader (GLFL) v1.0.2
+  OpenGL Function Loader (GLFL) v1.0.3
   Copyright (C) 2017 Egor Mikhailov <blckcat\@inbox.ru>
 
   This software is provided '"'"'as-is'"'"', without any express or implied

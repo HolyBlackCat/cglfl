@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.0.2
+  OpenGL Function Loader (GLFL) v1.0.3
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -192,6 +192,15 @@ class glfl
         static bool value = 0;
         return value;
     }
+    /* Get information about a function. */
+    struct func_info
+    {
+        const char *name;    // Function name.
+        const char *const *pnames; // Parameter names. If no parameters, contains a single empty string.
+        const char rtag;     // Return type tag: 'E' = enum, 'B' = bool, 'F' = bitfield, '.' = other.
+        const char *ptags;   // Parameter type tags (same as above).
+    };
+    static const func_info &get_func_info(int index);
 
     /* This is the index of glGetError() in the internal array of pointers.
      * It's useful for performing error checks inside of a call hook without incuding heavy `glfl_func_indices.h`. */
