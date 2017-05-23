@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.1
+  OpenGL Function Loader (GLFL) v1.1.1
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -841,9 +841,12 @@ void glfl::load_everything()
 
 static void load_version_gl(int major, int minor)
 {
+    major &= 0xffff;
+    minor &= 0xffff;
     switch (0x10000 * major + minor)
     {
       default:
+      [[fallthrough]];
       case 0x10000 * 4 + 5:
         GLFL_LOAD_FUNCTION(ClipControl);
         GLFL_LOAD_FUNCTION(CreateTransformFeedbacks);
@@ -967,6 +970,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(GetnHistogram);
         GLFL_LOAD_FUNCTION(GetnMinmax);
         GLFL_LOAD_FUNCTION(TextureBarrier);
+      [[fallthrough]];
       case 0x10000 * 4 + 4:
         GLFL_LOAD_FUNCTION(BufferStorage);
         GLFL_LOAD_FUNCTION(ClearTexImage);
@@ -977,6 +981,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(BindSamplers);
         GLFL_LOAD_FUNCTION(BindImageTextures);
         GLFL_LOAD_FUNCTION(BindVertexBuffers);
+      [[fallthrough]];
       case 0x10000 * 4 + 3:
         GLFL_LOAD_FUNCTION(ClearBufferData);
         GLFL_LOAD_FUNCTION(ClearBufferSubData);
@@ -1023,6 +1028,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(GetObjectPtrLabel);
         GLFL_LOAD_FUNCTION(GetPointerv);
         GLFL_LOAD_FUNCTION(GetPointerv);
+      [[fallthrough]];
       case 0x10000 * 4 + 2:
         GLFL_LOAD_FUNCTION(DrawArraysInstancedBaseInstance);
         GLFL_LOAD_FUNCTION(DrawElementsInstancedBaseInstance);
@@ -1036,6 +1042,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(TexStorage3D);
         GLFL_LOAD_FUNCTION(DrawTransformFeedbackInstanced);
         GLFL_LOAD_FUNCTION(DrawTransformFeedbackStreamInstanced);
+      [[fallthrough]];
       case 0x10000 * 4 + 1:
         GLFL_LOAD_FUNCTION(ReleaseShaderCompiler);
         GLFL_LOAD_FUNCTION(ShaderBinary);
@@ -1125,6 +1132,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(DepthRangeIndexed);
         GLFL_LOAD_FUNCTION(GetFloati_v);
         GLFL_LOAD_FUNCTION(GetDoublei_v);
+      [[fallthrough]];
       case 0x10000 * 4 + 0:
         GLFL_LOAD_FUNCTION(MinSampleShading);
         GLFL_LOAD_FUNCTION(BlendEquationi);
@@ -1172,6 +1180,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(BeginQueryIndexed);
         GLFL_LOAD_FUNCTION(EndQueryIndexed);
         GLFL_LOAD_FUNCTION(GetQueryIndexediv);
+      [[fallthrough]];
       case 0x10000 * 3 + 3:
         GLFL_LOAD_FUNCTION(BindFragDataLocationIndexed);
         GLFL_LOAD_FUNCTION(GetFragDataIndex);
@@ -1231,6 +1240,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(ColorP4uiv);
         GLFL_LOAD_FUNCTION(SecondaryColorP3ui);
         GLFL_LOAD_FUNCTION(SecondaryColorP3uiv);
+      [[fallthrough]];
       case 0x10000 * 3 + 2:
         GLFL_LOAD_FUNCTION(DrawElementsBaseVertex);
         GLFL_LOAD_FUNCTION(DrawRangeElementsBaseVertex);
@@ -1251,6 +1261,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(TexImage3DMultisample);
         GLFL_LOAD_FUNCTION(GetMultisamplefv);
         GLFL_LOAD_FUNCTION(SampleMaski);
+      [[fallthrough]];
       case 0x10000 * 3 + 1:
         GLFL_LOAD_FUNCTION(DrawArraysInstanced);
         GLFL_LOAD_FUNCTION(DrawElementsInstanced);
@@ -1267,6 +1278,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(BindBufferRange);
         GLFL_LOAD_FUNCTION(BindBufferBase);
         GLFL_LOAD_FUNCTION(GetIntegeri_v);
+      [[fallthrough]];
       case 0x10000 * 3 + 0:
         GLFL_LOAD_FUNCTION(ColorMaski);
         GLFL_LOAD_FUNCTION(GetBooleani_v);
@@ -1352,6 +1364,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(DeleteVertexArrays);
         GLFL_LOAD_FUNCTION(GenVertexArrays);
         GLFL_LOAD_FUNCTION(IsVertexArray);
+      [[fallthrough]];
       case 0x10000 * 2 + 1:
         GLFL_LOAD_FUNCTION(UniformMatrix2x3fv);
         GLFL_LOAD_FUNCTION(UniformMatrix3x2fv);
@@ -1359,6 +1372,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(UniformMatrix4x2fv);
         GLFL_LOAD_FUNCTION(UniformMatrix3x4fv);
         GLFL_LOAD_FUNCTION(UniformMatrix4x3fv);
+      [[fallthrough]];
       case 0x10000 * 2 + 0:
         GLFL_LOAD_FUNCTION(BlendEquationSeparate);
         GLFL_LOAD_FUNCTION(DrawBuffers);
@@ -1453,6 +1467,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(VertexAttrib4uiv);
         GLFL_LOAD_FUNCTION(VertexAttrib4usv);
         GLFL_LOAD_FUNCTION(VertexAttribPointer);
+      [[fallthrough]];
       case 0x10000 * 1 + 5:
         GLFL_LOAD_FUNCTION(GenQueries);
         GLFL_LOAD_FUNCTION(DeleteQueries);
@@ -1473,6 +1488,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(UnmapBuffer);
         GLFL_LOAD_FUNCTION(GetBufferParameteriv);
         GLFL_LOAD_FUNCTION(GetBufferPointerv);
+      [[fallthrough]];
       case 0x10000 * 1 + 4:
         GLFL_LOAD_FUNCTION(BlendFuncSeparate);
         GLFL_LOAD_FUNCTION(MultiDrawArrays);
@@ -1521,6 +1537,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(WindowPos3sv);
         GLFL_LOAD_FUNCTION(BlendColor);
         GLFL_LOAD_FUNCTION(BlendEquation);
+      [[fallthrough]];
       case 0x10000 * 1 + 3:
         GLFL_LOAD_FUNCTION(ActiveTexture);
         GLFL_LOAD_FUNCTION(SampleCoverage);
@@ -1568,11 +1585,13 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(LoadTransposeMatrixd);
         GLFL_LOAD_FUNCTION(MultTransposeMatrixf);
         GLFL_LOAD_FUNCTION(MultTransposeMatrixd);
+      [[fallthrough]];
       case 0x10000 * 1 + 2:
         GLFL_LOAD_FUNCTION(DrawRangeElements);
         GLFL_LOAD_FUNCTION(TexImage3D);
         GLFL_LOAD_FUNCTION(TexSubImage3D);
         GLFL_LOAD_FUNCTION(CopyTexSubImage3D);
+      [[fallthrough]];
       case 0x10000 * 1 + 1:
         GLFL_LOAD_FUNCTION(DrawArrays);
         GLFL_LOAD_FUNCTION(DrawElements);
@@ -1604,6 +1623,7 @@ static void load_version_gl(int major, int minor)
         GLFL_LOAD_FUNCTION(Indexubv);
         GLFL_LOAD_FUNCTION(PopClientAttrib);
         GLFL_LOAD_FUNCTION(PushClientAttrib);
+      [[fallthrough]];
       case 0x10000 * 1 + 0:
         GLFL_LOAD_FUNCTION(CullFace);
         GLFL_LOAD_FUNCTION(FrontFace);
@@ -1915,9 +1935,12 @@ static void load_version_gl(int major, int minor)
 }
 static void load_version_gles1(int major, int minor)
 {
+    major &= 0xffff;
+    minor &= 0xffff;
     switch (0x10000 * major + minor)
     {
       default:
+      [[fallthrough]];
       case 0x10000 * 1 + 0:
         GLFL_LOAD_FUNCTION(AlphaFunc);
         GLFL_LOAD_FUNCTION(ClearColor);
@@ -2067,9 +2090,12 @@ static void load_version_gles1(int major, int minor)
 }
 static void load_version_gles2(int major, int minor)
 {
+    major &= 0xffff;
+    minor &= 0xffff;
     switch (0x10000 * major + minor)
     {
       default:
+      [[fallthrough]];
       case 0x10000 * 3 + 2:
         GLFL_LOAD_FUNCTION(BlendBarrier);
         GLFL_LOAD_FUNCTION(CopyImageSubData);
@@ -2115,6 +2141,7 @@ static void load_version_gles2(int major, int minor)
         GLFL_LOAD_FUNCTION(TexBuffer);
         GLFL_LOAD_FUNCTION(TexBufferRange);
         GLFL_LOAD_FUNCTION(TexStorage3DMultisample);
+      [[fallthrough]];
       case 0x10000 * 3 + 1:
         GLFL_LOAD_FUNCTION(DispatchCompute);
         GLFL_LOAD_FUNCTION(DispatchComputeIndirect);
@@ -2184,6 +2211,7 @@ static void load_version_gles2(int major, int minor)
         GLFL_LOAD_FUNCTION(VertexAttribIFormat);
         GLFL_LOAD_FUNCTION(VertexAttribBinding);
         GLFL_LOAD_FUNCTION(VertexBindingDivisor);
+      [[fallthrough]];
       case 0x10000 * 3 + 0:
         GLFL_LOAD_FUNCTION(ReadBuffer);
         GLFL_LOAD_FUNCTION(DrawRangeElements);
@@ -2289,6 +2317,7 @@ static void load_version_gles2(int major, int minor)
         GLFL_LOAD_FUNCTION(TexStorage2D);
         GLFL_LOAD_FUNCTION(TexStorage3D);
         GLFL_LOAD_FUNCTION(GetInternalformativ);
+      [[fallthrough]];
       case 0x10000 * 2 + 0:
         GLFL_LOAD_FUNCTION(ActiveTexture);
         GLFL_LOAD_FUNCTION(AttachShader);
@@ -2436,9 +2465,12 @@ static void load_version_gles2(int major, int minor)
 }
 static void load_version_glsc2(int major, int minor)
 {
+    major &= 0xffff;
+    minor &= 0xffff;
     switch (0x10000 * major + minor)
     {
       default:
+      [[fallthrough]];
       case 0x10000 * 2 + 0:
         GLFL_LOAD_FUNCTION(ActiveTexture);
         GLFL_LOAD_FUNCTION(BindBuffer);

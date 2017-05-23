@@ -1,4 +1,4 @@
-#  OpenGL Function Loader (GLFL) v1.1 (generator script)
+#  OpenGL Function Loader (GLFL) v1.1.1 (generator script)
 #  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 #
 #  This software is provided '"'"'as-is'"'"', without any express or implied
@@ -691,12 +691,14 @@ perl -p -e 's|<#[^;]*;([^;]*);[^#]*#>|\1|g' | \
 uniq | \
 perl -p -e 's~^(.*)$~echo "static void load_version_\1(int major, int minor)
 {
+    major &= 0xffff;
+    minor &= 0xffff;
     switch (0x10000 * major + minor)
     {
       default:" >>out/glfl.cpp
 grep -P ";\1;" out/versions | tac >>out/glfl.cpp
 echo "    }\n}" >>out/glfl.cpp
-perl -pi -e "s/<#[^;]*;[^;]*;([^.]*)\.([^#]*)#><@/      case 0x10000 * \\1 + \\2:\n/g" out/glfl.cpp
+perl -pi -e "s/<#[^;]*;[^;]*;([^.]*)\.([^#]*)#><@/      [[fallthrough]];\n      case 0x10000 * \\1 + \\2:\n/g" out/glfl.cpp
 perl -pi -e "s/<<gl([^>]*)>>,/        GLFL_LOAD_FUNCTION(\\1);\n/g" out/glfl.cpp
 perl -pi -e "s/<<gl([^>]*)>>/        GLFL_LOAD_FUNCTION(\\1);/g" out/glfl.cpp
 perl -pi -e "s/@>//g" out/glfl.cpp~g' | source /dev/stdin
@@ -739,7 +741,7 @@ echo >>out/glfl.cpp '    };
 # License
 cd out
 find -regextype posix-extended -regex '.*\.(h|cpp)' -exec perl -pi -e 's|___LICENSE_TEXT_HERE___|/*
-  OpenGL Function Loader (GLFL) v1.1
+  OpenGL Function Loader (GLFL) v1.1.1
   Copyright (C) 2017 Egor Mikhailov <blckcat\@inbox.ru>
 
   This software is provided '"'"'as-is'"'"', without any express or implied
