@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.1.1
+  OpenGL Function Loader (GLFL) v1.2.0
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -30,6 +30,7 @@
 #include <type_traits>
 #include <cstdlib>
 #endif
+
 
 /* -- HOW TO USE --
  *
@@ -75,11 +76,12 @@
  *
  */
 
+
 #ifndef GLFL_API
+// This logic was copied from GLEW.
 #  ifdef APIENTRY
 #    define GLFL_API APIENTRY
 #  else
-// This logic was copied from GLEW.
 #    if defined(__MINGW32__) || defined(__CYGWIN__) || (_MSC_VER >= 800) || defined(_STDCALL_SUPPORTED) || defined(__BORLANDC__)
 #      define GLFL_API __stdcall
 #    else
@@ -87,6 +89,7 @@
 #    endif
 #  endif
 #endif
+
 
 typedef unsigned int GLenum;
 typedef unsigned char GLboolean;
@@ -133,834 +136,41 @@ typedef void (*GLDEBUGPROCAMD)(GLuint id, GLenum category, GLenum severity, GLsi
 typedef unsigned short GLhalfNV;
 typedef GLintptr GLvdpauSurfaceNV;
 
-class glfl
+
+#if __cplusplus >= 201700L
+#  define GLFL_CPP17(...) __VA_ARGS__
+#else
+#  define GLFL_CPP17(...)
+#endif
+
+#define GLFL_NODISCARD   GLFL_CPP17([[nodiscard]])
+#define GLFL_FALLTHROUGH GLFL_CPP17([[fallthrough]];)
+
+
+namespace glfl
 {
-    ~glfl() = delete;
-  public:
-    /* Holds loaded function pointers. */
     struct context;
+
     /* Returns a pointer to the current context.
-     * If the default context is active, but was not used (or explicitly activated) yet, 0 will be returned. */
-    static const context *active_context() {return current_context;}
+     * There is a default context which is active by default.
+     * If `set_active_context()` wasn't called yet and the default context
+     * wasn't used in any way, this function returns 0. */
+    GLFL_NODISCARD const context *active_context();
+
     /* Makes a context active.
-     * set_active_context(0) activates the default context (which is active by default). */
-    static void set_active_context(context *c);
+     * set_active_context(0) activates the default context. */
+    void set_active_context(context *);
+
     /* A special function for getting OpenGL function addresses should be provided by your window creating library. */
     using function_loader_t = void *(*)(const char *);
-    static void set_function_loader(function_loader_t ptr);
-    /* Load all standard functions. */
-    static void load_all_versions();
-    /* Load all standard functions and all extensions. */
-    static void load_everything();
+    void set_function_loader(function_loader_t);
 
-    /* Load OpenGL versions. */
-    static void load_gl(int major, int minor);
-    static void load_gl() {load_gl(-1,-1);}
-    static void load_gles(int major, int minor);
-    static void load_gles() {load_gles(-1,-1);}
-    static void load_glsc(int major, int minor);
-    static void load_glsc() {load_glsc(-1,-1);}
-
-    /* This variable is incremented each time a GL function is called (if default proxy is enabled).
-     * Before the first call it's equal to 0. Feel free to reset it if you need. */
-    static unsigned long long draw_calls;
-    /* Callback for logging.
-     * Has no effect when proxy functions are disabled. */
-    using logging_function_t = void (*)(const char *);
-    static logging_function_t logging_function; // [](const char *p){std::cout << p << '\n';} by default.
-    /* Makes default proxy call glGetError() after every function call.
-     * Has no effect when proxy functions are disabled. */
-    static bool check_errors; // 0 by default.
-    /* Terminates the program after the first error (if check_errors == 1) or when used function wasn't loaded.
-     * Has no effect when proxy functions are disabled. */
-    static bool terminate_on_error; // 0 by default.
-    /* Enables printing of `const char *` parameters as strings instead of pointers. May result in a crash if bad or unterminated pointers are used.
-     * Has no effect when proxy functions are disabled. */
-    static bool print_strings; // 0 by default.
-    /* Temporarily disable logging.
-     * When proxy functions are disabled, logging can't be enabled and this variable has no effect. */
-    static bool disable_logging; // 0 by deafult.
-
-    /* Get information about a function. */
-    struct func_info
-    {
-        const char *name;    // Function name.
-        const char *const *pnames; // Parameter names. If no parameters, contains a single empty string.
-        const char rtag;     // Return type tag: 'E' = enum, 'B' = bool, 'F' = bitfield, '.' = other.
-        const char *ptags;   // Parameter type tags (same as above).
-    };
-    static const func_info &get_func_info(int index);
-
-    /* This is the index of glGetError() in the internal array of pointers.
-     * It's useful for performing error checks inside of a call hook without incuding heavy `glfl_func_indices.h`. */
-    static constexpr int index_of_glGetError = 889;
-    /* This is the type of the above pointer. */
-    using type_of_glGetError = GLenum (GLFL_API *)();
-
-    /* Load extensions. */
-    static void load_extension_GL_3DFX_multisample(); // gl
-    static void load_extension_GL_3DFX_tbuffer(); // gl
-    static void load_extension_GL_3DFX_texture_compression_FXT1(); // gl
-    static void load_extension_GL_AMD_blend_minmax_factor(); // gl
-    static void load_extension_GL_AMD_compressed_3DC_texture(); // gles1|gles2
-    static void load_extension_GL_AMD_compressed_ATC_texture(); // gles1|gles2
-    static void load_extension_GL_AMD_conservative_depth(); // gl
-    static void load_extension_GL_AMD_debug_output(); // gl
-    static void load_extension_GL_AMD_depth_clamp_separate(); // gl
-    static void load_extension_GL_AMD_draw_buffers_blend(); // gl
-    static void load_extension_GL_AMD_framebuffer_sample_positions(); // disabled
-    static void load_extension_GL_AMD_gcn_shader(); // gl
-    static void load_extension_GL_AMD_gpu_shader_half_float(); // gl
-    static void load_extension_GL_AMD_gpu_shader_int64(); // gl
-    static void load_extension_GL_AMD_interleaved_elements(); // gl
-    static void load_extension_GL_AMD_multi_draw_indirect(); // gl
-    static void load_extension_GL_AMD_name_gen_delete(); // gl
-    static void load_extension_GL_AMD_occlusion_query_event(); // gl
-    static void load_extension_GL_AMD_performance_monitor(); // gl|glcore|gles2
-    static void load_extension_GL_AMD_pinned_memory(); // gl
-    static void load_extension_GL_AMD_program_binary_Z400(); // gles2
-    static void load_extension_GL_AMD_query_buffer_object(); // gl
-    static void load_extension_GL_AMD_sample_positions(); // gl
-    static void load_extension_GL_AMD_seamless_cubemap_per_texture(); // gl
-    static void load_extension_GL_AMD_shader_atomic_counter_ops(); // gl
-    static void load_extension_GL_AMD_shader_ballot(); // gl
-    static void load_extension_GL_AMD_shader_stencil_export(); // gl
-    static void load_extension_GL_AMD_shader_trinary_minmax(); // gl
-    static void load_extension_GL_AMD_shader_explicit_vertex_parameter(); // gl
-    static void load_extension_GL_AMD_sparse_texture(); // gl
-    static void load_extension_GL_AMD_stencil_operation_extended(); // gl
-    static void load_extension_GL_AMD_texture_texture4(); // gl
-    static void load_extension_GL_AMD_transform_feedback3_lines_triangles(); // gl
-    static void load_extension_GL_AMD_transform_feedback4(); // gl
-    static void load_extension_GL_AMD_vertex_shader_layer(); // gl
-    static void load_extension_GL_AMD_vertex_shader_tessellator(); // gl
-    static void load_extension_GL_AMD_vertex_shader_viewport_index(); // gl
-    static void load_extension_GL_ANDROID_extension_pack_es31a(); // gles2
-    static void load_extension_GL_ANGLE_depth_texture(); // gles2
-    static void load_extension_GL_ANGLE_framebuffer_blit(); // gles2
-    static void load_extension_GL_ANGLE_framebuffer_multisample(); // gles2
-    static void load_extension_GL_ANGLE_instanced_arrays(); // gles2
-    static void load_extension_GL_ANGLE_pack_reverse_row_order(); // gles2
-    static void load_extension_GL_ANGLE_program_binary(); // gles2
-    static void load_extension_GL_ANGLE_texture_compression_dxt3(); // gles2
-    static void load_extension_GL_ANGLE_texture_compression_dxt5(); // gles2
-    static void load_extension_GL_ANGLE_texture_usage(); // gles2
-    static void load_extension_GL_ANGLE_translated_shader_source(); // gles2
-    static void load_extension_GL_APPLE_aux_depth_stencil(); // gl
-    static void load_extension_GL_APPLE_client_storage(); // gl
-    static void load_extension_GL_APPLE_clip_distance(); // gles2
-    static void load_extension_GL_APPLE_color_buffer_packed_float(); // gles2
-    static void load_extension_GL_APPLE_copy_texture_levels(); // gles1|gles2
-    static void load_extension_GL_APPLE_element_array(); // gl
-    static void load_extension_GL_APPLE_fence(); // gl
-    static void load_extension_GL_APPLE_float_pixels(); // gl
-    static void load_extension_GL_APPLE_flush_buffer_range(); // gl
-    static void load_extension_GL_APPLE_framebuffer_multisample(); // gles1|gles2
-    static void load_extension_GL_APPLE_object_purgeable(); // gl
-    static void load_extension_GL_APPLE_rgb_422(); // gl|glcore|gles2
-    static void load_extension_GL_APPLE_row_bytes(); // gl
-    static void load_extension_GL_APPLE_specular_vector(); // gl
-    static void load_extension_GL_APPLE_sync(); // gles1|gles2
-    static void load_extension_GL_APPLE_texture_2D_limited_npot(); // gles1
-    static void load_extension_GL_APPLE_texture_format_BGRA8888(); // gles1|gles2
-    static void load_extension_GL_APPLE_texture_max_level(); // gles1|gles2
-    static void load_extension_GL_APPLE_texture_packed_float(); // gles2
-    static void load_extension_GL_APPLE_texture_range(); // gl
-    static void load_extension_GL_APPLE_transform_hint(); // gl
-    static void load_extension_GL_APPLE_vertex_array_object(); // gl
-    static void load_extension_GL_APPLE_vertex_array_range(); // gl
-    static void load_extension_GL_APPLE_vertex_program_evaluators(); // gl
-    static void load_extension_GL_APPLE_ycbcr_422(); // gl
-    static void load_extension_GL_ARB_ES2_compatibility(); // gl|glcore
-    static void load_extension_GL_ARB_ES3_1_compatibility(); // gl|glcore
-    static void load_extension_GL_ARB_ES3_2_compatibility(); // gl
-    static void load_extension_GL_ARB_ES3_compatibility(); // gl|glcore
-    static void load_extension_GL_ARB_arrays_of_arrays(); // gl|glcore
-    static void load_extension_GL_ARB_base_instance(); // gl|glcore
-    static void load_extension_GL_ARB_bindless_texture(); // gl|glcore
-    static void load_extension_GL_ARB_blend_func_extended(); // gl|glcore
-    static void load_extension_GL_ARB_buffer_storage(); // gl|glcore
-    static void load_extension_GL_ARB_cl_event(); // gl|glcore
-    static void load_extension_GL_ARB_clear_buffer_object(); // gl|glcore
-    static void load_extension_GL_ARB_clear_texture(); // gl|glcore
-    static void load_extension_GL_ARB_clip_control(); // gl|glcore
-    static void load_extension_GL_ARB_color_buffer_float(); // gl
-    static void load_extension_GL_ARB_compatibility(); // gl
-    static void load_extension_GL_ARB_compressed_texture_pixel_storage(); // gl|glcore
-    static void load_extension_GL_ARB_compute_shader(); // gl|glcore
-    static void load_extension_GL_ARB_compute_variable_group_size(); // gl|glcore
-    static void load_extension_GL_ARB_conditional_render_inverted(); // gl|glcore
-    static void load_extension_GL_ARB_conservative_depth(); // gl|glcore
-    static void load_extension_GL_ARB_copy_buffer(); // gl|glcore
-    static void load_extension_GL_ARB_copy_image(); // gl|glcore
-    static void load_extension_GL_ARB_cull_distance(); // gl|glcore
-    static void load_extension_GL_ARB_debug_output(); // gl|glcore
-    static void load_extension_GL_ARB_depth_buffer_float(); // gl|glcore
-    static void load_extension_GL_ARB_depth_clamp(); // gl|glcore
-    static void load_extension_GL_ARB_depth_texture(); // gl
-    static void load_extension_GL_ARB_derivative_control(); // gl|glcore
-    static void load_extension_GL_ARB_direct_state_access(); // gl|glcore
-    static void load_extension_GL_ARB_draw_buffers(); // gl
-    static void load_extension_GL_ARB_draw_buffers_blend(); // gl|glcore
-    static void load_extension_GL_ARB_draw_elements_base_vertex(); // gl|glcore
-    static void load_extension_GL_ARB_draw_indirect(); // gl|glcore
-    static void load_extension_GL_ARB_draw_instanced(); // gl
-    static void load_extension_GL_ARB_enhanced_layouts(); // gl|glcore
-    static void load_extension_GL_ARB_explicit_attrib_location(); // gl|glcore
-    static void load_extension_GL_ARB_explicit_uniform_location(); // gl|glcore
-    static void load_extension_GL_ARB_fragment_coord_conventions(); // gl|glcore
-    static void load_extension_GL_ARB_fragment_layer_viewport(); // gl|glcore
-    static void load_extension_GL_ARB_fragment_program(); // gl
-    static void load_extension_GL_ARB_fragment_program_shadow(); // gl
-    static void load_extension_GL_ARB_fragment_shader(); // gl
-    static void load_extension_GL_ARB_fragment_shader_interlock(); // gl
-    static void load_extension_GL_ARB_framebuffer_no_attachments(); // gl|glcore
-    static void load_extension_GL_ARB_framebuffer_object(); // gl|glcore
-    static void load_extension_GL_ARB_framebuffer_sRGB(); // gl|glcore
-    static void load_extension_GL_ARB_geometry_shader4(); // gl
-    static void load_extension_GL_ARB_get_program_binary(); // gl|glcore
-    static void load_extension_GL_ARB_get_texture_sub_image(); // gl|glcore
-    static void load_extension_GL_ARB_gpu_shader5(); // gl|glcore
-    static void load_extension_GL_ARB_gpu_shader_fp64(); // gl|glcore
-    static void load_extension_GL_ARB_gpu_shader_int64(); // gl
-    static void load_extension_GL_ARB_half_float_pixel(); // gl
-    static void load_extension_GL_ARB_half_float_vertex(); // gl|glcore
-    static void load_extension_GL_ARB_imaging(); // gl|glcore
-    static void load_extension_GL_ARB_indirect_parameters(); // gl|glcore
-    static void load_extension_GL_ARB_instanced_arrays(); // gl
-    static void load_extension_GL_ARB_internalformat_query(); // gl|glcore
-    static void load_extension_GL_ARB_internalformat_query2(); // gl|glcore
-    static void load_extension_GL_ARB_invalidate_subdata(); // gl|glcore
-    static void load_extension_GL_ARB_map_buffer_alignment(); // gl|glcore
-    static void load_extension_GL_ARB_map_buffer_range(); // gl|glcore
-    static void load_extension_GL_ARB_matrix_palette(); // gl
-    static void load_extension_GL_ARB_multi_bind(); // gl|glcore
-    static void load_extension_GL_ARB_multi_draw_indirect(); // gl|glcore
-    static void load_extension_GL_ARB_multisample(); // gl
-    static void load_extension_GL_ARB_multitexture(); // gl
-    static void load_extension_GL_ARB_occlusion_query(); // gl
-    static void load_extension_GL_ARB_occlusion_query2(); // gl|glcore
-    static void load_extension_GL_ARB_parallel_shader_compile(); // gl
-    static void load_extension_GL_ARB_pipeline_statistics_query(); // gl|glcore
-    static void load_extension_GL_ARB_pixel_buffer_object(); // gl
-    static void load_extension_GL_ARB_point_parameters(); // gl
-    static void load_extension_GL_ARB_point_sprite(); // gl
-    static void load_extension_GL_ARB_post_depth_coverage(); // gl
-    static void load_extension_GL_ARB_program_interface_query(); // gl|glcore
-    static void load_extension_GL_ARB_provoking_vertex(); // gl|glcore
-    static void load_extension_GL_ARB_query_buffer_object(); // gl|glcore
-    static void load_extension_GL_ARB_robust_buffer_access_behavior(); // gl|glcore
-    static void load_extension_GL_ARB_robustness(); // gl|glcore
-    static void load_extension_GL_ARB_robustness_isolation(); // gl|glcore
-    static void load_extension_GL_ARB_sample_locations(); // gl
-    static void load_extension_GL_ARB_sample_shading(); // gl|glcore
-    static void load_extension_GL_ARB_sampler_objects(); // gl|glcore
-    static void load_extension_GL_ARB_seamless_cube_map(); // gl|glcore
-    static void load_extension_GL_ARB_seamless_cubemap_per_texture(); // gl|glcore
-    static void load_extension_GL_ARB_separate_shader_objects(); // gl|glcore
-    static void load_extension_GL_ARB_shader_atomic_counter_ops(); // gl
-    static void load_extension_GL_ARB_shader_atomic_counters(); // gl|glcore
-    static void load_extension_GL_ARB_shader_ballot(); // gl
-    static void load_extension_GL_ARB_shader_bit_encoding(); // gl|glcore
-    static void load_extension_GL_ARB_shader_clock(); // gl
-    static void load_extension_GL_ARB_shader_draw_parameters(); // gl|glcore
-    static void load_extension_GL_ARB_shader_group_vote(); // gl|glcore
-    static void load_extension_GL_ARB_shader_image_load_store(); // gl|glcore
-    static void load_extension_GL_ARB_shader_image_size(); // gl|glcore
-    static void load_extension_GL_ARB_shader_objects(); // gl
-    static void load_extension_GL_ARB_shader_precision(); // gl|glcore
-    static void load_extension_GL_ARB_shader_stencil_export(); // gl|glcore
-    static void load_extension_GL_ARB_shader_storage_buffer_object(); // gl|glcore
-    static void load_extension_GL_ARB_shader_subroutine(); // gl|glcore
-    static void load_extension_GL_ARB_shader_texture_image_samples(); // gl|glcore
-    static void load_extension_GL_ARB_shader_texture_lod(); // gl
-    static void load_extension_GL_ARB_shader_viewport_layer_array(); // gl
-    static void load_extension_GL_ARB_shading_language_100(); // gl
-    static void load_extension_GL_ARB_shading_language_420pack(); // gl|glcore
-    static void load_extension_GL_ARB_shading_language_include(); // gl|glcore
-    static void load_extension_GL_ARB_shading_language_packing(); // gl|glcore
-    static void load_extension_GL_ARB_shadow(); // gl
-    static void load_extension_GL_ARB_shadow_ambient(); // gl
-    static void load_extension_GL_ARB_sparse_buffer(); // gl|glcore
-    static void load_extension_GL_ARB_sparse_texture(); // gl|glcore
-    static void load_extension_GL_ARB_sparse_texture2(); // gl|glcore|gles2
-    static void load_extension_GL_ARB_sparse_texture_clamp(); // gl
-    static void load_extension_GL_ARB_stencil_texturing(); // gl|glcore
-    static void load_extension_GL_ARB_sync(); // gl|glcore
-    static void load_extension_GL_ARB_tessellation_shader(); // gl|glcore
-    static void load_extension_GL_ARB_texture_barrier(); // gl|glcore
-    static void load_extension_GL_ARB_texture_border_clamp(); // gl
-    static void load_extension_GL_ARB_texture_buffer_object(); // gl
-    static void load_extension_GL_ARB_texture_buffer_object_rgb32(); // gl|glcore
-    static void load_extension_GL_ARB_texture_buffer_range(); // gl|glcore
-    static void load_extension_GL_ARB_texture_compression(); // gl
-    static void load_extension_GL_ARB_texture_compression_bptc(); // gl|glcore
-    static void load_extension_GL_ARB_texture_compression_rgtc(); // gl|glcore
-    static void load_extension_GL_ARB_texture_cube_map(); // gl
-    static void load_extension_GL_ARB_texture_cube_map_array(); // gl|glcore
-    static void load_extension_GL_ARB_texture_env_add(); // gl
-    static void load_extension_GL_ARB_texture_env_combine(); // gl
-    static void load_extension_GL_ARB_texture_env_crossbar(); // gl
-    static void load_extension_GL_ARB_texture_env_dot3(); // gl
-    static void load_extension_GL_ARB_texture_filter_minmax(); // gl
-    static void load_extension_GL_ARB_texture_float(); // gl
-    static void load_extension_GL_ARB_texture_gather(); // gl|glcore
-    static void load_extension_GL_ARB_texture_mirror_clamp_to_edge(); // gl|glcore
-    static void load_extension_GL_ARB_texture_mirrored_repeat(); // gl
-    static void load_extension_GL_ARB_texture_multisample(); // gl|glcore
-    static void load_extension_GL_ARB_texture_non_power_of_two(); // gl
-    static void load_extension_GL_ARB_texture_query_levels(); // gl|glcore
-    static void load_extension_GL_ARB_texture_query_lod(); // gl|glcore
-    static void load_extension_GL_ARB_texture_rectangle(); // gl
-    static void load_extension_GL_ARB_texture_rg(); // gl|glcore
-    static void load_extension_GL_ARB_texture_rgb10_a2ui(); // gl|glcore
-    static void load_extension_GL_ARB_texture_stencil8(); // gl|glcore
-    static void load_extension_GL_ARB_texture_storage(); // gl|glcore
-    static void load_extension_GL_ARB_texture_storage_multisample(); // gl|glcore
-    static void load_extension_GL_ARB_texture_swizzle(); // gl|glcore
-    static void load_extension_GL_ARB_texture_view(); // gl|glcore
-    static void load_extension_GL_ARB_timer_query(); // gl|glcore
-    static void load_extension_GL_ARB_transform_feedback2(); // gl|glcore
-    static void load_extension_GL_ARB_transform_feedback3(); // gl|glcore
-    static void load_extension_GL_ARB_transform_feedback_instanced(); // gl|glcore
-    static void load_extension_GL_ARB_transform_feedback_overflow_query(); // gl|glcore
-    static void load_extension_GL_ARB_transpose_matrix(); // gl
-    static void load_extension_GL_ARB_uniform_buffer_object(); // gl|glcore
-    static void load_extension_GL_ARB_vertex_array_bgra(); // gl|glcore
-    static void load_extension_GL_ARB_vertex_array_object(); // gl|glcore
-    static void load_extension_GL_ARB_vertex_attrib_64bit(); // gl|glcore
-    static void load_extension_GL_ARB_vertex_attrib_binding(); // gl|glcore
-    static void load_extension_GL_ARB_vertex_blend(); // gl
-    static void load_extension_GL_ARB_vertex_buffer_object(); // gl
-    static void load_extension_GL_ARB_vertex_program(); // gl
-    static void load_extension_GL_ARB_vertex_shader(); // gl
-    static void load_extension_GL_ARB_vertex_type_10f_11f_11f_rev(); // gl|glcore
-    static void load_extension_GL_ARB_vertex_type_2_10_10_10_rev(); // gl|glcore
-    static void load_extension_GL_ARB_viewport_array(); // gl|glcore
-    static void load_extension_GL_ARB_window_pos(); // gl
-    static void load_extension_GL_ARM_mali_program_binary(); // gles2
-    static void load_extension_GL_ARM_mali_shader_binary(); // gles2
-    static void load_extension_GL_ARM_rgba8(); // gles1|gles2
-    static void load_extension_GL_ARM_shader_framebuffer_fetch(); // gles2
-    static void load_extension_GL_ARM_shader_framebuffer_fetch_depth_stencil(); // gles2
-    static void load_extension_GL_ATI_draw_buffers(); // gl
-    static void load_extension_GL_ATI_element_array(); // gl
-    static void load_extension_GL_ATI_envmap_bumpmap(); // gl
-    static void load_extension_GL_ATI_fragment_shader(); // gl
-    static void load_extension_GL_ATI_map_object_buffer(); // gl
-    static void load_extension_GL_ATI_meminfo(); // gl
-    static void load_extension_GL_ATI_pixel_format_float(); // gl
-    static void load_extension_GL_ATI_pn_triangles(); // gl
-    static void load_extension_GL_ATI_separate_stencil(); // gl
-    static void load_extension_GL_ATI_text_fragment_shader(); // gl
-    static void load_extension_GL_ATI_texture_env_combine3(); // gl
-    static void load_extension_GL_ATI_texture_float(); // gl
-    static void load_extension_GL_ATI_texture_mirror_once(); // gl
-    static void load_extension_GL_ATI_vertex_array_object(); // gl
-    static void load_extension_GL_ATI_vertex_attrib_array_object(); // gl
-    static void load_extension_GL_ATI_vertex_streams(); // gl
-    static void load_extension_GL_DMP_program_binary(); // gles2
-    static void load_extension_GL_DMP_shader_binary(); // gles2
-    static void load_extension_GL_EXT_422_pixels(); // gl
-    static void load_extension_GL_EXT_YUV_target(); // gles2
-    static void load_extension_GL_EXT_abgr(); // gl
-    static void load_extension_GL_EXT_base_instance(); // gles2
-    static void load_extension_GL_EXT_bgra(); // gl
-    static void load_extension_GL_EXT_bindable_uniform(); // gl
-    static void load_extension_GL_EXT_blend_color(); // gl
-    static void load_extension_GL_EXT_blend_equation_separate(); // gl
-    static void load_extension_GL_EXT_blend_func_extended(); // gles2
-    static void load_extension_GL_EXT_blend_func_separate(); // gl
-    static void load_extension_GL_EXT_blend_logic_op(); // gl
-    static void load_extension_GL_EXT_blend_minmax(); // gl|gles1|gles2
-    static void load_extension_GL_EXT_blend_subtract(); // gl
-    static void load_extension_GL_EXT_buffer_storage(); // gles2
-    static void load_extension_GL_EXT_clear_texture(); // gles2
-    static void load_extension_GL_EXT_clip_cull_distance(); // gles2
-    static void load_extension_GL_EXT_clip_volume_hint(); // gl
-    static void load_extension_GL_EXT_cmyka(); // gl
-    static void load_extension_GL_EXT_color_buffer_float(); // gles2
-    static void load_extension_GL_EXT_color_buffer_half_float(); // gles2
-    static void load_extension_GL_EXT_color_subtable(); // gl
-    static void load_extension_GL_EXT_compiled_vertex_array(); // gl
-    static void load_extension_GL_EXT_conservative_depth(); // gles2
-    static void load_extension_GL_EXT_convolution(); // gl
-    static void load_extension_GL_EXT_coordinate_frame(); // gl
-    static void load_extension_GL_EXT_copy_image(); // gles2
-    static void load_extension_GL_EXT_copy_texture(); // gl
-    static void load_extension_GL_EXT_cull_vertex(); // gl
-    static void load_extension_GL_EXT_debug_label(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_debug_marker(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_depth_bounds_test(); // gl
-    static void load_extension_GL_EXT_direct_state_access(); // gl
-    static void load_extension_GL_EXT_discard_framebuffer(); // gles1|gles2
-    static void load_extension_GL_EXT_disjoint_timer_query(); // gles2
-    static void load_extension_GL_EXT_draw_buffers(); // gles2
-    static void load_extension_GL_EXT_draw_buffers2(); // gl
-    static void load_extension_GL_EXT_draw_buffers_indexed(); // gles2
-    static void load_extension_GL_EXT_draw_elements_base_vertex(); // gles2
-    static void load_extension_GL_EXT_draw_instanced(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_draw_range_elements(); // gl
-    static void load_extension_GL_EXT_draw_transform_feedback(); // gles2
-    static void load_extension_GL_EXT_float_blend(); // gles2
-    static void load_extension_GL_EXT_fog_coord(); // gl
-    static void load_extension_GL_EXT_framebuffer_blit(); // gl
-    static void load_extension_GL_EXT_framebuffer_multisample(); // gl
-    static void load_extension_GL_EXT_framebuffer_multisample_blit_scaled(); // gl
-    static void load_extension_GL_EXT_framebuffer_object(); // gl
-    static void load_extension_GL_EXT_framebuffer_sRGB(); // gl
-    static void load_extension_GL_EXT_geometry_point_size(); // gles2
-    static void load_extension_GL_EXT_geometry_shader(); // gles2
-    static void load_extension_GL_EXT_geometry_shader4(); // gl
-    static void load_extension_GL_EXT_gpu_program_parameters(); // gl
-    static void load_extension_GL_EXT_gpu_shader4(); // gl
-    static void load_extension_GL_EXT_gpu_shader5(); // gles2
-    static void load_extension_GL_EXT_histogram(); // gl
-    static void load_extension_GL_EXT_index_array_formats(); // gl
-    static void load_extension_GL_EXT_index_func(); // gl
-    static void load_extension_GL_EXT_index_material(); // gl
-    static void load_extension_GL_EXT_index_texture(); // gl
-    static void load_extension_GL_EXT_instanced_arrays(); // gles2
-    static void load_extension_GL_EXT_light_texture(); // gl
-    static void load_extension_GL_EXT_map_buffer_range(); // gles1|gles2
-    static void load_extension_GL_EXT_misc_attribute(); // gl
-    static void load_extension_GL_EXT_multi_draw_arrays(); // gl|gles1|gles2
-    static void load_extension_GL_EXT_multi_draw_indirect(); // gles2
-    static void load_extension_GL_EXT_multisample(); // gl
-    static void load_extension_GL_EXT_multisampled_compatibility(); // gles2
-    static void load_extension_GL_EXT_multisampled_render_to_texture(); // gles1|gles2
-    static void load_extension_GL_EXT_multiview_draw_buffers(); // gles2
-    static void load_extension_GL_EXT_occlusion_query_boolean(); // gles2
-    static void load_extension_GL_EXT_packed_depth_stencil(); // gl
-    static void load_extension_GL_EXT_packed_float(); // gl
-    static void load_extension_GL_EXT_packed_pixels(); // gl
-    static void load_extension_GL_EXT_paletted_texture(); // gl
-    static void load_extension_GL_EXT_pixel_buffer_object(); // gl
-    static void load_extension_GL_EXT_pixel_transform(); // gl
-    static void load_extension_GL_EXT_pixel_transform_color_table(); // gl
-    static void load_extension_GL_EXT_point_parameters(); // gl
-    static void load_extension_GL_EXT_polygon_offset(); // gl
-    static void load_extension_GL_EXT_polygon_offset_clamp(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_post_depth_coverage(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_primitive_bounding_box(); // gles2
-    static void load_extension_GL_EXT_protected_textures(); // gles2
-    static void load_extension_GL_EXT_provoking_vertex(); // gl
-    static void load_extension_GL_EXT_pvrtc_sRGB(); // gles2
-    static void load_extension_GL_EXT_raster_multisample(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_read_format_bgra(); // gles1|gles2
-    static void load_extension_GL_EXT_render_snorm(); // gles2
-    static void load_extension_GL_EXT_rescale_normal(); // gl
-    static void load_extension_GL_EXT_robustness(); // gles1|gles2
-    static void load_extension_GL_EXT_sRGB(); // gles1|gles2
-    static void load_extension_GL_EXT_sRGB_write_control(); // gles2
-    static void load_extension_GL_EXT_secondary_color(); // gl
-    static void load_extension_GL_EXT_separate_shader_objects(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_separate_specular_color(); // gl
-    static void load_extension_GL_EXT_shader_framebuffer_fetch(); // gles2
-    static void load_extension_GL_EXT_shader_group_vote(); // gles2
-    static void load_extension_GL_EXT_shader_image_load_formatted(); // gl
-    static void load_extension_GL_EXT_shader_image_load_store(); // gl
-    static void load_extension_GL_EXT_shader_implicit_conversions(); // gles2
-    static void load_extension_GL_EXT_shader_integer_mix(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_shader_io_blocks(); // gles2
-    static void load_extension_GL_EXT_shader_non_constant_global_initializers(); // gles2
-    static void load_extension_GL_EXT_shader_pixel_local_storage(); // gles2
-    static void load_extension_GL_EXT_shader_pixel_local_storage2(); // gles2
-    static void load_extension_GL_EXT_shader_texture_lod(); // gles2
-    static void load_extension_GL_EXT_shadow_funcs(); // gl
-    static void load_extension_GL_EXT_shadow_samplers(); // gles2
-    static void load_extension_GL_EXT_shared_texture_palette(); // gl
-    static void load_extension_GL_EXT_sparse_texture(); // gles2
-    static void load_extension_GL_EXT_sparse_texture2(); // gl
-    static void load_extension_GL_EXT_stencil_clear_tag(); // gl
-    static void load_extension_GL_EXT_stencil_two_side(); // gl
-    static void load_extension_GL_EXT_stencil_wrap(); // gl
-    static void load_extension_GL_EXT_subtexture(); // gl
-    static void load_extension_GL_EXT_tessellation_point_size(); // gles2
-    static void load_extension_GL_EXT_tessellation_shader(); // gles2
-    static void load_extension_GL_EXT_texture(); // gl
-    static void load_extension_GL_EXT_texture3D(); // gl
-    static void load_extension_GL_EXT_texture_array(); // gl
-    static void load_extension_GL_EXT_texture_border_clamp(); // gles2
-    static void load_extension_GL_EXT_texture_buffer(); // gles2
-    static void load_extension_GL_EXT_texture_buffer_object(); // gl
-    static void load_extension_GL_EXT_texture_compression_dxt1(); // gles1|gles2
-    static void load_extension_GL_EXT_texture_compression_latc(); // gl
-    static void load_extension_GL_EXT_texture_compression_rgtc(); // gl
-    static void load_extension_GL_EXT_texture_compression_s3tc(); // gl|glcore|gles2|glsc2
-    static void load_extension_GL_EXT_texture_cube_map(); // gl
-    static void load_extension_GL_EXT_texture_cube_map_array(); // gles2
-    static void load_extension_GL_EXT_texture_env_add(); // gl
-    static void load_extension_GL_EXT_texture_env_combine(); // gl
-    static void load_extension_GL_EXT_texture_env_dot3(); // gl
-    static void load_extension_GL_EXT_texture_filter_anisotropic(); // gl|gles1|gles2
-    static void load_extension_GL_EXT_texture_filter_minmax(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_texture_format_BGRA8888(); // gles1|gles2
-    static void load_extension_GL_EXT_texture_integer(); // gl
-    static void load_extension_GL_EXT_texture_lod_bias(); // gl|gles1
-    static void load_extension_GL_EXT_texture_mirror_clamp(); // gl
-    static void load_extension_GL_EXT_texture_norm16(); // gles2
-    static void load_extension_GL_EXT_texture_object(); // gl
-    static void load_extension_GL_EXT_texture_perturb_normal(); // gl
-    static void load_extension_GL_EXT_texture_rg(); // gles2
-    static void load_extension_GL_EXT_texture_sRGB(); // gl
-    static void load_extension_GL_EXT_texture_sRGB_R8(); // gles2
-    static void load_extension_GL_EXT_texture_sRGB_RG8(); // gles2
-    static void load_extension_GL_EXT_texture_sRGB_decode(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_texture_shared_exponent(); // gl
-    static void load_extension_GL_EXT_texture_snorm(); // gl
-    static void load_extension_GL_EXT_texture_storage(); // gles1|gles2
-    static void load_extension_GL_EXT_texture_swizzle(); // gl
-    static void load_extension_GL_EXT_texture_type_2_10_10_10_REV(); // gles2
-    static void load_extension_GL_EXT_texture_view(); // gles2
-    static void load_extension_GL_EXT_timer_query(); // gl
-    static void load_extension_GL_EXT_transform_feedback(); // gl
-    static void load_extension_GL_EXT_unpack_subimage(); // gles2
-    static void load_extension_GL_EXT_vertex_array(); // gl
-    static void load_extension_GL_EXT_vertex_array_bgra(); // gl
-    static void load_extension_GL_EXT_vertex_attrib_64bit(); // gl
-    static void load_extension_GL_EXT_vertex_shader(); // gl
-    static void load_extension_GL_EXT_vertex_weighting(); // gl
-    static void load_extension_GL_EXT_window_rectangles(); // gl|glcore|gles2
-    static void load_extension_GL_EXT_x11_sync_object(); // gl
-    static void load_extension_GL_FJ_shader_binary_GCCSO(); // gles2
-    static void load_extension_GL_GREMEDY_frame_terminator(); // gl
-    static void load_extension_GL_GREMEDY_string_marker(); // gl
-    static void load_extension_GL_HP_convolution_border_modes(); // gl
-    static void load_extension_GL_HP_image_transform(); // gl
-    static void load_extension_GL_HP_occlusion_test(); // gl
-    static void load_extension_GL_HP_texture_lighting(); // gl
-    static void load_extension_GL_IBM_cull_vertex(); // gl
-    static void load_extension_GL_IBM_multimode_draw_arrays(); // gl
-    static void load_extension_GL_IBM_rasterpos_clip(); // gl
-    static void load_extension_GL_IBM_static_data(); // gl
-    static void load_extension_GL_IBM_texture_mirrored_repeat(); // gl
-    static void load_extension_GL_IBM_vertex_array_lists(); // gl
-    static void load_extension_GL_IMG_bindless_texture(); // gles2
-    static void load_extension_GL_IMG_framebuffer_downsample(); // gles2
-    static void load_extension_GL_IMG_multisampled_render_to_texture(); // gles1|gles2
-    static void load_extension_GL_IMG_program_binary(); // gles2
-    static void load_extension_GL_IMG_read_format(); // gles1|gles2
-    static void load_extension_GL_IMG_shader_binary(); // gles2
-    static void load_extension_GL_IMG_texture_compression_pvrtc(); // gles1|gles2
-    static void load_extension_GL_IMG_texture_compression_pvrtc2(); // gles2
-    static void load_extension_GL_IMG_texture_env_enhanced_fixed_function(); // gles1
-    static void load_extension_GL_IMG_texture_filter_cubic(); // gles2
-    static void load_extension_GL_IMG_user_clip_plane(); // gles1
-    static void load_extension_GL_INGR_blend_func_separate(); // gl
-    static void load_extension_GL_INGR_color_clamp(); // gl
-    static void load_extension_GL_INGR_interlace_read(); // gl
-    static void load_extension_GL_INTEL_conservative_rasterization(); // gl|glcore|gles2
-    static void load_extension_GL_INTEL_fragment_shader_ordering(); // gl
-    static void load_extension_GL_INTEL_framebuffer_CMAA(); // gl|glcore|gles2
-    static void load_extension_GL_INTEL_map_texture(); // gl
-    static void load_extension_GL_INTEL_parallel_arrays(); // gl
-    static void load_extension_GL_INTEL_performance_query(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_blend_equation_advanced(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_blend_equation_advanced_coherent(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_context_flush_control(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_debug(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_no_error(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_robust_buffer_access_behavior(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_robustness(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_texture_compression_astc_hdr(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_texture_compression_astc_ldr(); // gl|glcore|gles2
-    static void load_extension_GL_KHR_texture_compression_astc_sliced_3d(); // gl|glcore|gles2
-    static void load_extension_GL_MESAX_texture_stack(); // gl
-    static void load_extension_GL_MESA_pack_invert(); // gl
-    static void load_extension_GL_MESA_resize_buffers(); // gl
-    static void load_extension_GL_MESA_window_pos(); // gl
-    static void load_extension_GL_MESA_ycbcr_texture(); // gl
-    static void load_extension_GL_NVX_conditional_render(); // gl
-    static void load_extension_GL_NVX_gpu_memory_info(); // gl
-    static void load_extension_GL_NV_bindless_multi_draw_indirect(); // gl
-    static void load_extension_GL_NV_bindless_multi_draw_indirect_count(); // gl
-    static void load_extension_GL_NV_bindless_texture(); // gl|glcore|gles2
-    static void load_extension_GL_NV_blend_equation_advanced(); // gl|glcore|gles2
-    static void load_extension_GL_NV_blend_equation_advanced_coherent(); // gl|glcore|gles2
-    static void load_extension_GL_NV_blend_square(); // gl
-    static void load_extension_GL_NV_clip_space_w_scaling(); // gl
-    static void load_extension_GL_NV_command_list(); // gl
-    static void load_extension_GL_NV_compute_program5(); // gl
-    static void load_extension_GL_NV_conditional_render(); // gl|glcore|gles2
-    static void load_extension_GL_NV_conservative_raster(); // gl|glcore|gles2
-    static void load_extension_GL_NV_conservative_raster_dilate(); // gl
-    static void load_extension_GL_NV_conservative_raster_pre_snap_triangles(); // gl|glcore|gles2
-    static void load_extension_GL_NV_copy_buffer(); // gles2
-    static void load_extension_GL_NV_copy_depth_to_color(); // gl
-    static void load_extension_GL_NV_copy_image(); // gl
-    static void load_extension_GL_NV_coverage_sample(); // gles2
-    static void load_extension_GL_NV_deep_texture3D(); // gl
-    static void load_extension_GL_NV_depth_buffer_float(); // gl
-    static void load_extension_GL_NV_depth_clamp(); // gl
-    static void load_extension_GL_NV_depth_nonlinear(); // gles2
-    static void load_extension_GL_NV_draw_buffers(); // gles2
-    static void load_extension_GL_NV_draw_instanced(); // gles2
-    static void load_extension_GL_NV_draw_texture(); // gl
-    static void load_extension_GL_NV_evaluators(); // gl
-    static void load_extension_GL_NV_explicit_attrib_location(); // gles2
-    static void load_extension_GL_NV_explicit_multisample(); // gl
-    static void load_extension_GL_NV_fbo_color_attachments(); // gles2
-    static void load_extension_GL_NV_fence(); // gl|gles1|gles2
-    static void load_extension_GL_NV_fill_rectangle(); // gl|glcore|gles2
-    static void load_extension_GL_NV_float_buffer(); // gl
-    static void load_extension_GL_NV_fog_distance(); // gl
-    static void load_extension_GL_NV_fragment_coverage_to_color(); // gl|glcore|gles2
-    static void load_extension_GL_NV_fragment_program(); // gl
-    static void load_extension_GL_NV_fragment_program2(); // gl
-    static void load_extension_GL_NV_fragment_program4(); // gl
-    static void load_extension_GL_NV_fragment_program_option(); // gl
-    static void load_extension_GL_NV_fragment_shader_interlock(); // gl|glcore|gles2
-    static void load_extension_GL_NV_framebuffer_blit(); // gles2
-    static void load_extension_GL_NV_framebuffer_mixed_samples(); // gl|glcore|gles2
-    static void load_extension_GL_NV_framebuffer_multisample(); // gles2
-    static void load_extension_GL_NV_framebuffer_multisample_coverage(); // gl
-    static void load_extension_GL_NV_generate_mipmap_sRGB(); // gles2
-    static void load_extension_GL_NV_geometry_program4(); // gl
-    static void load_extension_GL_NV_geometry_shader4(); // gl
-    static void load_extension_GL_NV_geometry_shader_passthrough(); // gl|glcore|gles2
-    static void load_extension_GL_NV_gpu_program4(); // gl
-    static void load_extension_GL_NV_gpu_program5(); // gl
-    static void load_extension_GL_NV_gpu_program5_mem_extended(); // gl
-    static void load_extension_GL_NV_gpu_shader5(); // gl|glcore|gles2
-    static void load_extension_GL_NV_half_float(); // gl
-    static void load_extension_GL_NV_image_formats(); // gles2
-    static void load_extension_GL_NV_instanced_arrays(); // gles2
-    static void load_extension_GL_NV_internalformat_sample_query(); // gl|glcore|gles2
-    static void load_extension_GL_NV_light_max_exponent(); // gl
-    static void load_extension_GL_NV_multisample_coverage(); // gl
-    static void load_extension_GL_NV_multisample_filter_hint(); // gl
-    static void load_extension_GL_NV_non_square_matrices(); // gles2
-    static void load_extension_GL_NV_occlusion_query(); // gl
-    static void load_extension_GL_NV_packed_depth_stencil(); // gl
-    static void load_extension_GL_NV_parameter_buffer_object(); // gl
-    static void load_extension_GL_NV_parameter_buffer_object2(); // gl
-    static void load_extension_GL_NV_path_rendering(); // gl|glcore|gles2
-    static void load_extension_GL_NV_path_rendering_shared_edge(); // gl|glcore|gles2
-    static void load_extension_GL_NV_pixel_data_range(); // gl
-    static void load_extension_GL_NV_point_sprite(); // gl
-    static void load_extension_GL_NV_polygon_mode(); // gles2
-    static void load_extension_GL_NV_present_video(); // gl
-    static void load_extension_GL_NV_primitive_restart(); // gl
-    static void load_extension_GL_NV_read_buffer(); // gles2
-    static void load_extension_GL_NV_read_buffer_front(); // gles2
-    static void load_extension_GL_NV_read_depth(); // gles2
-    static void load_extension_GL_NV_read_depth_stencil(); // gles2
-    static void load_extension_GL_NV_read_stencil(); // gles2
-    static void load_extension_GL_NV_register_combiners(); // gl
-    static void load_extension_GL_NV_register_combiners2(); // gl
-    static void load_extension_GL_NV_robustness_video_memory_purge(); // gl
-    static void load_extension_GL_NV_sRGB_formats(); // gles2
-    static void load_extension_GL_NV_sample_locations(); // gl|glcore|gles2
-    static void load_extension_GL_NV_sample_mask_override_coverage(); // gl|glcore|gles2
-    static void load_extension_GL_NV_shader_atomic_counters(); // gl
-    static void load_extension_GL_NV_shader_atomic_float(); // gl
-    static void load_extension_GL_NV_shader_atomic_float64(); // gl
-    static void load_extension_GL_NV_shader_atomic_fp16_vector(); // gl|glcore|gles2
-    static void load_extension_GL_NV_shader_atomic_int64(); // gl
-    static void load_extension_GL_NV_shader_buffer_load(); // gl
-    static void load_extension_GL_NV_shader_buffer_store(); // gl
-    static void load_extension_GL_NV_shader_noperspective_interpolation(); // gles2
-    static void load_extension_GL_NV_shader_storage_buffer_object(); // gl
-    static void load_extension_GL_NV_shader_thread_group(); // gl
-    static void load_extension_GL_NV_shader_thread_shuffle(); // gl
-    static void load_extension_GL_NV_shadow_samplers_array(); // gles2
-    static void load_extension_GL_NV_shadow_samplers_cube(); // gles2
-    static void load_extension_GL_NV_stereo_view_rendering(); // gl
-    static void load_extension_GL_NV_tessellation_program5(); // gl
-    static void load_extension_GL_NV_texgen_emboss(); // gl
-    static void load_extension_GL_NV_texgen_reflection(); // gl
-    static void load_extension_GL_NV_texture_barrier(); // gl
-    static void load_extension_GL_NV_texture_border_clamp(); // gles2
-    static void load_extension_GL_NV_texture_compression_s3tc_update(); // gles2
-    static void load_extension_GL_NV_texture_compression_vtc(); // gl
-    static void load_extension_GL_NV_texture_env_combine4(); // gl
-    static void load_extension_GL_NV_texture_expand_normal(); // gl
-    static void load_extension_GL_NV_texture_multisample(); // gl
-    static void load_extension_GL_NV_texture_npot_2D_mipmap(); // gles2
-    static void load_extension_GL_NV_texture_rectangle(); // gl
-    static void load_extension_GL_NV_texture_shader(); // gl
-    static void load_extension_GL_NV_texture_shader2(); // gl
-    static void load_extension_GL_NV_texture_shader3(); // gl
-    static void load_extension_GL_NV_transform_feedback(); // gl
-    static void load_extension_GL_NV_transform_feedback2(); // gl
-    static void load_extension_GL_NV_uniform_buffer_unified_memory(); // gl
-    static void load_extension_GL_NV_vdpau_interop(); // gl
-    static void load_extension_GL_NV_vertex_array_range(); // gl
-    static void load_extension_GL_NV_vertex_array_range2(); // gl
-    static void load_extension_GL_NV_vertex_attrib_integer_64bit(); // gl
-    static void load_extension_GL_NV_vertex_buffer_unified_memory(); // gl
-    static void load_extension_GL_NV_vertex_program(); // gl
-    static void load_extension_GL_NV_vertex_program1_1(); // gl
-    static void load_extension_GL_NV_vertex_program2(); // gl
-    static void load_extension_GL_NV_vertex_program2_option(); // gl
-    static void load_extension_GL_NV_vertex_program3(); // gl
-    static void load_extension_GL_NV_vertex_program4(); // gl
-    static void load_extension_GL_NV_video_capture(); // gl
-    static void load_extension_GL_NV_viewport_array(); // gles2
-    static void load_extension_GL_NV_viewport_array2(); // gl|glcore|gles2
-    static void load_extension_GL_NV_viewport_swizzle(); // gl|glcore|gles2
-    static void load_extension_GL_OES_EGL_image(); // gles1|gles2
-    static void load_extension_GL_OES_EGL_image_external(); // gles1|gles2
-    static void load_extension_GL_OES_EGL_image_external_essl3(); // gles2
-    static void load_extension_GL_OES_blend_equation_separate(); // gles1
-    static void load_extension_GL_OES_blend_func_separate(); // gles1
-    static void load_extension_GL_OES_blend_subtract(); // gles1
-    static void load_extension_GL_OES_byte_coordinates(); // gl|gles1
-    static void load_extension_GL_OES_compressed_ETC1_RGB8_sub_texture(); // gles1|gles2
-    static void load_extension_GL_OES_compressed_ETC1_RGB8_texture(); // gles1|gles2
-    static void load_extension_GL_OES_compressed_paletted_texture(); // gl|gles1|gles2
-    static void load_extension_GL_OES_copy_image(); // gles2
-    static void load_extension_GL_OES_depth24(); // gles1|gles2|glsc2
-    static void load_extension_GL_OES_depth32(); // gles1|gles2|glsc2
-    static void load_extension_GL_OES_depth_texture(); // gles2
-    static void load_extension_GL_OES_draw_buffers_indexed(); // gles2
-    static void load_extension_GL_OES_draw_elements_base_vertex(); // gles2
-    static void load_extension_GL_OES_draw_texture(); // gles1
-    static void load_extension_GL_OES_element_index_uint(); // gles1|gles2
-    static void load_extension_GL_OES_extended_matrix_palette(); // gles1
-    static void load_extension_GL_OES_fbo_render_mipmap(); // gles1|gles2
-    static void load_extension_GL_OES_fixed_point(); // gl|gles1
-    static void load_extension_GL_OES_fragment_precision_high(); // gles2
-    static void load_extension_GL_OES_framebuffer_object(); // gles1
-    static void load_extension_GL_OES_geometry_point_size(); // gles2
-    static void load_extension_GL_OES_geometry_shader(); // gles2
-    static void load_extension_GL_OES_get_program_binary(); // gles2
-    static void load_extension_GL_OES_gpu_shader5(); // gles2
-    static void load_extension_GL_OES_mapbuffer(); // gles1|gles2
-    static void load_extension_GL_OES_matrix_get(); // gles1
-    static void load_extension_GL_OES_matrix_palette(); // gles1
-    static void load_extension_GL_OES_packed_depth_stencil(); // gles1|gles2
-    static void load_extension_GL_OES_point_size_array(); // gles1
-    static void load_extension_GL_OES_point_sprite(); // gles1
-    static void load_extension_GL_OES_primitive_bounding_box(); // gles2
-    static void load_extension_GL_OES_query_matrix(); // gl|gles1
-    static void load_extension_GL_OES_read_format(); // gl|gles1
-    static void load_extension_GL_OES_required_internalformat(); // gles1|gles2
-    static void load_extension_GL_OES_rgb8_rgba8(); // gles1|gles2|glsc2
-    static void load_extension_GL_OES_sample_shading(); // gles2
-    static void load_extension_GL_OES_sample_variables(); // gles2
-    static void load_extension_GL_OES_shader_image_atomic(); // gles2
-    static void load_extension_GL_OES_shader_io_blocks(); // gles2
-    static void load_extension_GL_OES_shader_multisample_interpolation(); // gles2
-    static void load_extension_GL_OES_single_precision(); // gl|gles1
-    static void load_extension_GL_OES_standard_derivatives(); // gles2|glsc2
-    static void load_extension_GL_OES_stencil1(); // gles1|gles2
-    static void load_extension_GL_OES_stencil4(); // gles1|gles2
-    static void load_extension_GL_OES_stencil8(); // gles1
-    static void load_extension_GL_OES_stencil_wrap(); // gles1
-    static void load_extension_GL_OES_surfaceless_context(); // gles2
-    static void load_extension_GL_OES_tessellation_point_size(); // gles2
-    static void load_extension_GL_OES_tessellation_shader(); // gles2
-    static void load_extension_GL_OES_texture_3D(); // gles2
-    static void load_extension_GL_OES_texture_border_clamp(); // gles2
-    static void load_extension_GL_OES_texture_buffer(); // gles2
-    static void load_extension_GL_OES_texture_compression_astc(); // gles2
-    static void load_extension_GL_OES_texture_cube_map(); // gles1
-    static void load_extension_GL_OES_texture_cube_map_array(); // gles2
-    static void load_extension_GL_OES_texture_env_crossbar(); // gles1
-    static void load_extension_GL_OES_texture_float(); // gles2
-    static void load_extension_GL_OES_texture_float_linear(); // gles2
-    static void load_extension_GL_OES_texture_half_float(); // gles2
-    static void load_extension_GL_OES_texture_half_float_linear(); // gles2
-    static void load_extension_GL_OES_texture_mirrored_repeat(); // gles1
-    static void load_extension_GL_OES_texture_npot(); // gles2
-    static void load_extension_GL_OES_texture_stencil8(); // gles2
-    static void load_extension_GL_OES_texture_storage_multisample_2d_array(); // gles2
-    static void load_extension_GL_OES_texture_view(); // gles2
-    static void load_extension_GL_OES_vertex_array_object(); // gles1|gles2
-    static void load_extension_GL_OES_vertex_half_float(); // gles2
-    static void load_extension_GL_OES_vertex_type_10_10_10_2(); // gles2
-    static void load_extension_GL_OES_viewport_array(); // gles2
-    static void load_extension_GL_OML_interlace(); // gl
-    static void load_extension_GL_OML_resample(); // gl
-    static void load_extension_GL_OML_subsample(); // gl
-    static void load_extension_GL_OVR_multiview(); // gl|glcore|gles2
-    static void load_extension_GL_OVR_multiview2(); // gl|glcore|gles2
-    static void load_extension_GL_OVR_multiview_multisampled_render_to_texture(); // gles2
-    static void load_extension_GL_PGI_misc_hints(); // gl
-    static void load_extension_GL_PGI_vertex_hints(); // gl
-    static void load_extension_GL_QCOM_alpha_test(); // gles2
-    static void load_extension_GL_QCOM_binning_control(); // gles2
-    static void load_extension_GL_QCOM_driver_control(); // gles1|gles2
-    static void load_extension_GL_QCOM_extended_get(); // gles1|gles2
-    static void load_extension_GL_QCOM_extended_get2(); // gles1|gles2
-    static void load_extension_GL_QCOM_perfmon_global_mode(); // gles1|gles2
-    static void load_extension_GL_QCOM_tiled_rendering(); // gles1|gles2
-    static void load_extension_GL_QCOM_writeonly_rendering(); // gles1|gles2
-    static void load_extension_GL_REND_screen_coordinates(); // gl
-    static void load_extension_GL_S3_s3tc(); // gl
-    static void load_extension_GL_SGIS_detail_texture(); // gl
-    static void load_extension_GL_SGIS_fog_function(); // gl
-    static void load_extension_GL_SGIS_generate_mipmap(); // gl
-    static void load_extension_GL_SGIS_multisample(); // gl
-    static void load_extension_GL_SGIS_pixel_texture(); // gl
-    static void load_extension_GL_SGIS_point_line_texgen(); // gl
-    static void load_extension_GL_SGIS_point_parameters(); // gl
-    static void load_extension_GL_SGIS_sharpen_texture(); // gl
-    static void load_extension_GL_SGIS_texture4D(); // gl
-    static void load_extension_GL_SGIS_texture_border_clamp(); // gl
-    static void load_extension_GL_SGIS_texture_color_mask(); // gl
-    static void load_extension_GL_SGIS_texture_edge_clamp(); // gl
-    static void load_extension_GL_SGIS_texture_filter4(); // gl
-    static void load_extension_GL_SGIS_texture_lod(); // gl
-    static void load_extension_GL_SGIS_texture_select(); // gl
-    static void load_extension_GL_SGIX_async(); // gl
-    static void load_extension_GL_SGIX_async_histogram(); // gl
-    static void load_extension_GL_SGIX_async_pixel(); // gl
-    static void load_extension_GL_SGIX_blend_alpha_minmax(); // gl
-    static void load_extension_GL_SGIX_calligraphic_fragment(); // gl
-    static void load_extension_GL_SGIX_clipmap(); // gl
-    static void load_extension_GL_SGIX_convolution_accuracy(); // gl
-    static void load_extension_GL_SGIX_depth_pass_instrument(); // gl
-    static void load_extension_GL_SGIX_depth_texture(); // gl
-    static void load_extension_GL_SGIX_flush_raster(); // gl
-    static void load_extension_GL_SGIX_fog_offset(); // gl
-    static void load_extension_GL_SGIX_fragment_lighting(); // gl
-    static void load_extension_GL_SGIX_framezoom(); // gl
-    static void load_extension_GL_SGIX_igloo_interface(); // gl
-    static void load_extension_GL_SGIX_instruments(); // gl
-    static void load_extension_GL_SGIX_interlace(); // gl
-    static void load_extension_GL_SGIX_ir_instrument1(); // gl
-    static void load_extension_GL_SGIX_list_priority(); // gl
-    static void load_extension_GL_SGIX_pixel_texture(); // gl
-    static void load_extension_GL_SGIX_pixel_tiles(); // gl
-    static void load_extension_GL_SGIX_polynomial_ffd(); // gl
-    static void load_extension_GL_SGIX_reference_plane(); // gl
-    static void load_extension_GL_SGIX_resample(); // gl
-    static void load_extension_GL_SGIX_scalebias_hint(); // gl
-    static void load_extension_GL_SGIX_shadow(); // gl
-    static void load_extension_GL_SGIX_shadow_ambient(); // gl
-    static void load_extension_GL_SGIX_sprite(); // gl
-    static void load_extension_GL_SGIX_subsample(); // gl
-    static void load_extension_GL_SGIX_tag_sample_buffer(); // gl
-    static void load_extension_GL_SGIX_texture_add_env(); // gl
-    static void load_extension_GL_SGIX_texture_coordinate_clamp(); // gl
-    static void load_extension_GL_SGIX_texture_lod_bias(); // gl
-    static void load_extension_GL_SGIX_texture_multi_buffer(); // gl
-    static void load_extension_GL_SGIX_texture_scale_bias(); // gl
-    static void load_extension_GL_SGIX_vertex_preclip(); // gl
-    static void load_extension_GL_SGIX_ycrcb(); // gl
-    static void load_extension_GL_SGIX_ycrcb_subsample(); // gl
-    static void load_extension_GL_SGIX_ycrcba(); // gl
-    static void load_extension_GL_SGI_color_matrix(); // gl
-    static void load_extension_GL_SGI_color_table(); // gl
-    static void load_extension_GL_SGI_texture_color_table(); // gl
-    static void load_extension_GL_SUNX_constant_data(); // gl
-    static void load_extension_GL_SUN_convolution_border_modes(); // gl
-    static void load_extension_GL_SUN_global_alpha(); // gl
-    static void load_extension_GL_SUN_mesh_array(); // gl
-    static void load_extension_GL_SUN_slice_accum(); // gl
-    static void load_extension_GL_SUN_triangle_list(); // gl
-    static void load_extension_GL_SUN_vertex(); // gl
-    static void load_extension_GL_VIV_shader_binary(); // gles2
-    static void load_extension_GL_WIN_phong_shading(); // gl
-    static void load_extension_GL_WIN_specular_fog(); // gl
-
+    /* Holds loaded function pointers. */
     struct context
     {
-        function_loader_t function_loader = 0;
         void *ptrs[3164] {};
+
+        function_loader_t function_loader = 0;
 
         ~context()
         {
@@ -969,9 +179,877 @@ class glfl
         }
     };
 
-  private:
-    static context *current_context, *default_context;
-};
+    /* Load all standard functions. */
+    void load_all_versions();
+    /* Load all standard functions and all extensions. */
+    void load_everything();
+
+    /* Load OpenGL versions.
+     * Specifying an incorrect major+minor combinaton will load the newest version. */
+    void load_gl(int major, int minor);
+    void load_gl();
+    void load_gles(int major, int minor);
+    void load_gles();
+    void load_glsc(int major, int minor);
+    void load_glsc();
+
+    /* The interface of the default (logging) proxy.
+     * Functions below have no effect if it's disabled. You may reuse the interface for your own proxy. */
+    namespace proxy
+    {
+        /* Functions marked as 'internal' should only be used in the implementation of the proxy.
+         * Calls to functions marked 'msg' are logged unless the message callback is disabled; see below. */
+
+        /* If enabled, `glGetError()` is called after each OpenGL function call except itself.
+         * Enabled by default. */
+        /*msg*/ void check_errors(bool);
+        GLFL_NODISCARD bool check_errors();
+
+        /* If enabled with `check_errors`, the program will be terminated
+         * if the automatic call to `glGetError` reports any errors.
+         * Enabled by default. */
+        /*msg*/ void stop_on_errors(bool);
+        GLFL_NODISCARD bool stop_on_errors();
+
+        /* If enabled, all strings passed to GL functions are printed.
+         * Otherwise they are printed as pointers.
+         * Disabled by default. */
+        /*msg*/ void print_string_arguments(bool);
+        GLFL_NODISCARD bool print_string_arguments();
+
+
+        /* Disable 'print' callback.
+         * Since default 'message' and 'error' callbacks use `print()`, they won't print anything too. */
+        /*msg*/ void disable_logging(bool);
+
+        /* Disable 'message' callback. */
+        void disable_messages(bool);
+
+
+        using print_function_t = void (*)(const char *);
+
+        /* Sets a callback for logging.
+         * It has to add '\n' at the end of the string.
+         * The default implementation is `std::puts()` (wrapped into a lambda). */
+        void set_print_function(print_function_t);
+
+        /* Calls the above callback. */
+        void print(const char *);
+
+        /* Similar to `set_print_function` but the string should be visually emphasized somehow.
+         * The default implementation uses `print()`, so you don't have to override it separately.
+         * The default implementation also appends '\n' to the beginning of the string; you probably should do the same. */
+        void set_message_function(print_function_t);
+
+        /* Calls the above callback. */
+        void message(const char *);
+
+        /* Similar to `set_print_function` but the string should be visually emphasized as error.
+         * The default implementation uses `print()`, so you don't have to override it separately.
+         * The default implementation also appends '\n' to the beginning of the string; you probably should do the same. */
+        void set_error_function(print_function_t);
+
+        /* Calls the above callback.
+         * Then, if `stop_on_errors` is set, stops the program. */
+        void error(const char *);
+
+
+        /* This is incremented each time a GL function is called.
+         * The default value is 0. Feel free to reset it. */
+        GLFL_NODISCARD unsigned long long draw_call_count();
+        /*msg*/ void reset_draw_call_count();
+        /*internal*/ void incr_draw_call_count();
+
+
+        /* The location of the last call.
+         * Note that the actual call locations are not registered.
+         * Rather, the last location where a function name was used is saved.
+         * The difference is only noticeable when using function pointers. */
+        GLFL_NODISCARD int line();
+        GLFL_NODISCARD const char *file();
+        /*internal*/ void location(const char *file, int line);
+        /*internal*/ GLFL_NODISCARD bool line_changed(); // Calling this function resets the flag.
+        /*internal*/ GLFL_NODISCARD bool file_changed(); // Calling this function resets the flag.
+
+
+        /*internal*/ constexpr int index_of_glGetError = 889;
+        /*internal*/ using type_of_glGetError = GLenum (GLFL_API *)();
+
+
+        /*internal*/
+        struct function_info
+        {
+            enum class type {other, enumeration, boolean, bitfield};
+            const char *name;
+            const char *const *param_names;
+            type return_type;
+            const type *param_types;
+        };
+
+        /*internal*/ GLFL_NODISCARD const function_info &get_function_info(int index);
+    }
+
+
+    /* Load extensions. */
+    void load_extension_GL_3DFX_multisample(); // gl
+    void load_extension_GL_3DFX_tbuffer(); // gl
+    void load_extension_GL_3DFX_texture_compression_FXT1(); // gl
+    void load_extension_GL_AMD_blend_minmax_factor(); // gl
+    void load_extension_GL_AMD_compressed_3DC_texture(); // gles1|gles2
+    void load_extension_GL_AMD_compressed_ATC_texture(); // gles1|gles2
+    void load_extension_GL_AMD_conservative_depth(); // gl
+    void load_extension_GL_AMD_debug_output(); // gl
+    void load_extension_GL_AMD_depth_clamp_separate(); // gl
+    void load_extension_GL_AMD_draw_buffers_blend(); // gl
+    void load_extension_GL_AMD_framebuffer_sample_positions(); // disabled
+    void load_extension_GL_AMD_gcn_shader(); // gl
+    void load_extension_GL_AMD_gpu_shader_half_float(); // gl
+    void load_extension_GL_AMD_gpu_shader_int64(); // gl
+    void load_extension_GL_AMD_interleaved_elements(); // gl
+    void load_extension_GL_AMD_multi_draw_indirect(); // gl
+    void load_extension_GL_AMD_name_gen_delete(); // gl
+    void load_extension_GL_AMD_occlusion_query_event(); // gl
+    void load_extension_GL_AMD_performance_monitor(); // gl|glcore|gles2
+    void load_extension_GL_AMD_pinned_memory(); // gl
+    void load_extension_GL_AMD_program_binary_Z400(); // gles2
+    void load_extension_GL_AMD_query_buffer_object(); // gl
+    void load_extension_GL_AMD_sample_positions(); // gl
+    void load_extension_GL_AMD_seamless_cubemap_per_texture(); // gl
+    void load_extension_GL_AMD_shader_atomic_counter_ops(); // gl
+    void load_extension_GL_AMD_shader_ballot(); // gl
+    void load_extension_GL_AMD_shader_stencil_export(); // gl
+    void load_extension_GL_AMD_shader_trinary_minmax(); // gl
+    void load_extension_GL_AMD_shader_explicit_vertex_parameter(); // gl
+    void load_extension_GL_AMD_sparse_texture(); // gl
+    void load_extension_GL_AMD_stencil_operation_extended(); // gl
+    void load_extension_GL_AMD_texture_texture4(); // gl
+    void load_extension_GL_AMD_transform_feedback3_lines_triangles(); // gl
+    void load_extension_GL_AMD_transform_feedback4(); // gl
+    void load_extension_GL_AMD_vertex_shader_layer(); // gl
+    void load_extension_GL_AMD_vertex_shader_tessellator(); // gl
+    void load_extension_GL_AMD_vertex_shader_viewport_index(); // gl
+    void load_extension_GL_ANDROID_extension_pack_es31a(); // gles2
+    void load_extension_GL_ANGLE_depth_texture(); // gles2
+    void load_extension_GL_ANGLE_framebuffer_blit(); // gles2
+    void load_extension_GL_ANGLE_framebuffer_multisample(); // gles2
+    void load_extension_GL_ANGLE_instanced_arrays(); // gles2
+    void load_extension_GL_ANGLE_pack_reverse_row_order(); // gles2
+    void load_extension_GL_ANGLE_program_binary(); // gles2
+    void load_extension_GL_ANGLE_texture_compression_dxt3(); // gles2
+    void load_extension_GL_ANGLE_texture_compression_dxt5(); // gles2
+    void load_extension_GL_ANGLE_texture_usage(); // gles2
+    void load_extension_GL_ANGLE_translated_shader_source(); // gles2
+    void load_extension_GL_APPLE_aux_depth_stencil(); // gl
+    void load_extension_GL_APPLE_client_storage(); // gl
+    void load_extension_GL_APPLE_clip_distance(); // gles2
+    void load_extension_GL_APPLE_color_buffer_packed_float(); // gles2
+    void load_extension_GL_APPLE_copy_texture_levels(); // gles1|gles2
+    void load_extension_GL_APPLE_element_array(); // gl
+    void load_extension_GL_APPLE_fence(); // gl
+    void load_extension_GL_APPLE_float_pixels(); // gl
+    void load_extension_GL_APPLE_flush_buffer_range(); // gl
+    void load_extension_GL_APPLE_framebuffer_multisample(); // gles1|gles2
+    void load_extension_GL_APPLE_object_purgeable(); // gl
+    void load_extension_GL_APPLE_rgb_422(); // gl|glcore|gles2
+    void load_extension_GL_APPLE_row_bytes(); // gl
+    void load_extension_GL_APPLE_specular_vector(); // gl
+    void load_extension_GL_APPLE_sync(); // gles1|gles2
+    void load_extension_GL_APPLE_texture_2D_limited_npot(); // gles1
+    void load_extension_GL_APPLE_texture_format_BGRA8888(); // gles1|gles2
+    void load_extension_GL_APPLE_texture_max_level(); // gles1|gles2
+    void load_extension_GL_APPLE_texture_packed_float(); // gles2
+    void load_extension_GL_APPLE_texture_range(); // gl
+    void load_extension_GL_APPLE_transform_hint(); // gl
+    void load_extension_GL_APPLE_vertex_array_object(); // gl
+    void load_extension_GL_APPLE_vertex_array_range(); // gl
+    void load_extension_GL_APPLE_vertex_program_evaluators(); // gl
+    void load_extension_GL_APPLE_ycbcr_422(); // gl
+    void load_extension_GL_ARB_ES2_compatibility(); // gl|glcore
+    void load_extension_GL_ARB_ES3_1_compatibility(); // gl|glcore
+    void load_extension_GL_ARB_ES3_2_compatibility(); // gl
+    void load_extension_GL_ARB_ES3_compatibility(); // gl|glcore
+    void load_extension_GL_ARB_arrays_of_arrays(); // gl|glcore
+    void load_extension_GL_ARB_base_instance(); // gl|glcore
+    void load_extension_GL_ARB_bindless_texture(); // gl|glcore
+    void load_extension_GL_ARB_blend_func_extended(); // gl|glcore
+    void load_extension_GL_ARB_buffer_storage(); // gl|glcore
+    void load_extension_GL_ARB_cl_event(); // gl|glcore
+    void load_extension_GL_ARB_clear_buffer_object(); // gl|glcore
+    void load_extension_GL_ARB_clear_texture(); // gl|glcore
+    void load_extension_GL_ARB_clip_control(); // gl|glcore
+    void load_extension_GL_ARB_color_buffer_float(); // gl
+    void load_extension_GL_ARB_compatibility(); // gl
+    void load_extension_GL_ARB_compressed_texture_pixel_storage(); // gl|glcore
+    void load_extension_GL_ARB_compute_shader(); // gl|glcore
+    void load_extension_GL_ARB_compute_variable_group_size(); // gl|glcore
+    void load_extension_GL_ARB_conditional_render_inverted(); // gl|glcore
+    void load_extension_GL_ARB_conservative_depth(); // gl|glcore
+    void load_extension_GL_ARB_copy_buffer(); // gl|glcore
+    void load_extension_GL_ARB_copy_image(); // gl|glcore
+    void load_extension_GL_ARB_cull_distance(); // gl|glcore
+    void load_extension_GL_ARB_debug_output(); // gl|glcore
+    void load_extension_GL_ARB_depth_buffer_float(); // gl|glcore
+    void load_extension_GL_ARB_depth_clamp(); // gl|glcore
+    void load_extension_GL_ARB_depth_texture(); // gl
+    void load_extension_GL_ARB_derivative_control(); // gl|glcore
+    void load_extension_GL_ARB_direct_state_access(); // gl|glcore
+    void load_extension_GL_ARB_draw_buffers(); // gl
+    void load_extension_GL_ARB_draw_buffers_blend(); // gl|glcore
+    void load_extension_GL_ARB_draw_elements_base_vertex(); // gl|glcore
+    void load_extension_GL_ARB_draw_indirect(); // gl|glcore
+    void load_extension_GL_ARB_draw_instanced(); // gl
+    void load_extension_GL_ARB_enhanced_layouts(); // gl|glcore
+    void load_extension_GL_ARB_explicit_attrib_location(); // gl|glcore
+    void load_extension_GL_ARB_explicit_uniform_location(); // gl|glcore
+    void load_extension_GL_ARB_fragment_coord_conventions(); // gl|glcore
+    void load_extension_GL_ARB_fragment_layer_viewport(); // gl|glcore
+    void load_extension_GL_ARB_fragment_program(); // gl
+    void load_extension_GL_ARB_fragment_program_shadow(); // gl
+    void load_extension_GL_ARB_fragment_shader(); // gl
+    void load_extension_GL_ARB_fragment_shader_interlock(); // gl
+    void load_extension_GL_ARB_framebuffer_no_attachments(); // gl|glcore
+    void load_extension_GL_ARB_framebuffer_object(); // gl|glcore
+    void load_extension_GL_ARB_framebuffer_sRGB(); // gl|glcore
+    void load_extension_GL_ARB_geometry_shader4(); // gl
+    void load_extension_GL_ARB_get_program_binary(); // gl|glcore
+    void load_extension_GL_ARB_get_texture_sub_image(); // gl|glcore
+    void load_extension_GL_ARB_gpu_shader5(); // gl|glcore
+    void load_extension_GL_ARB_gpu_shader_fp64(); // gl|glcore
+    void load_extension_GL_ARB_gpu_shader_int64(); // gl
+    void load_extension_GL_ARB_half_float_pixel(); // gl
+    void load_extension_GL_ARB_half_float_vertex(); // gl|glcore
+    void load_extension_GL_ARB_imaging(); // gl|glcore
+    void load_extension_GL_ARB_indirect_parameters(); // gl|glcore
+    void load_extension_GL_ARB_instanced_arrays(); // gl
+    void load_extension_GL_ARB_internalformat_query(); // gl|glcore
+    void load_extension_GL_ARB_internalformat_query2(); // gl|glcore
+    void load_extension_GL_ARB_invalidate_subdata(); // gl|glcore
+    void load_extension_GL_ARB_map_buffer_alignment(); // gl|glcore
+    void load_extension_GL_ARB_map_buffer_range(); // gl|glcore
+    void load_extension_GL_ARB_matrix_palette(); // gl
+    void load_extension_GL_ARB_multi_bind(); // gl|glcore
+    void load_extension_GL_ARB_multi_draw_indirect(); // gl|glcore
+    void load_extension_GL_ARB_multisample(); // gl
+    void load_extension_GL_ARB_multitexture(); // gl
+    void load_extension_GL_ARB_occlusion_query(); // gl
+    void load_extension_GL_ARB_occlusion_query2(); // gl|glcore
+    void load_extension_GL_ARB_parallel_shader_compile(); // gl
+    void load_extension_GL_ARB_pipeline_statistics_query(); // gl|glcore
+    void load_extension_GL_ARB_pixel_buffer_object(); // gl
+    void load_extension_GL_ARB_point_parameters(); // gl
+    void load_extension_GL_ARB_point_sprite(); // gl
+    void load_extension_GL_ARB_post_depth_coverage(); // gl
+    void load_extension_GL_ARB_program_interface_query(); // gl|glcore
+    void load_extension_GL_ARB_provoking_vertex(); // gl|glcore
+    void load_extension_GL_ARB_query_buffer_object(); // gl|glcore
+    void load_extension_GL_ARB_robust_buffer_access_behavior(); // gl|glcore
+    void load_extension_GL_ARB_robustness(); // gl|glcore
+    void load_extension_GL_ARB_robustness_isolation(); // gl|glcore
+    void load_extension_GL_ARB_sample_locations(); // gl
+    void load_extension_GL_ARB_sample_shading(); // gl|glcore
+    void load_extension_GL_ARB_sampler_objects(); // gl|glcore
+    void load_extension_GL_ARB_seamless_cube_map(); // gl|glcore
+    void load_extension_GL_ARB_seamless_cubemap_per_texture(); // gl|glcore
+    void load_extension_GL_ARB_separate_shader_objects(); // gl|glcore
+    void load_extension_GL_ARB_shader_atomic_counter_ops(); // gl
+    void load_extension_GL_ARB_shader_atomic_counters(); // gl|glcore
+    void load_extension_GL_ARB_shader_ballot(); // gl
+    void load_extension_GL_ARB_shader_bit_encoding(); // gl|glcore
+    void load_extension_GL_ARB_shader_clock(); // gl
+    void load_extension_GL_ARB_shader_draw_parameters(); // gl|glcore
+    void load_extension_GL_ARB_shader_group_vote(); // gl|glcore
+    void load_extension_GL_ARB_shader_image_load_store(); // gl|glcore
+    void load_extension_GL_ARB_shader_image_size(); // gl|glcore
+    void load_extension_GL_ARB_shader_objects(); // gl
+    void load_extension_GL_ARB_shader_precision(); // gl|glcore
+    void load_extension_GL_ARB_shader_stencil_export(); // gl|glcore
+    void load_extension_GL_ARB_shader_storage_buffer_object(); // gl|glcore
+    void load_extension_GL_ARB_shader_subroutine(); // gl|glcore
+    void load_extension_GL_ARB_shader_texture_image_samples(); // gl|glcore
+    void load_extension_GL_ARB_shader_texture_lod(); // gl
+    void load_extension_GL_ARB_shader_viewport_layer_array(); // gl
+    void load_extension_GL_ARB_shading_language_100(); // gl
+    void load_extension_GL_ARB_shading_language_420pack(); // gl|glcore
+    void load_extension_GL_ARB_shading_language_include(); // gl|glcore
+    void load_extension_GL_ARB_shading_language_packing(); // gl|glcore
+    void load_extension_GL_ARB_shadow(); // gl
+    void load_extension_GL_ARB_shadow_ambient(); // gl
+    void load_extension_GL_ARB_sparse_buffer(); // gl|glcore
+    void load_extension_GL_ARB_sparse_texture(); // gl|glcore
+    void load_extension_GL_ARB_sparse_texture2(); // gl|glcore|gles2
+    void load_extension_GL_ARB_sparse_texture_clamp(); // gl
+    void load_extension_GL_ARB_stencil_texturing(); // gl|glcore
+    void load_extension_GL_ARB_sync(); // gl|glcore
+    void load_extension_GL_ARB_tessellation_shader(); // gl|glcore
+    void load_extension_GL_ARB_texture_barrier(); // gl|glcore
+    void load_extension_GL_ARB_texture_border_clamp(); // gl
+    void load_extension_GL_ARB_texture_buffer_object(); // gl
+    void load_extension_GL_ARB_texture_buffer_object_rgb32(); // gl|glcore
+    void load_extension_GL_ARB_texture_buffer_range(); // gl|glcore
+    void load_extension_GL_ARB_texture_compression(); // gl
+    void load_extension_GL_ARB_texture_compression_bptc(); // gl|glcore
+    void load_extension_GL_ARB_texture_compression_rgtc(); // gl|glcore
+    void load_extension_GL_ARB_texture_cube_map(); // gl
+    void load_extension_GL_ARB_texture_cube_map_array(); // gl|glcore
+    void load_extension_GL_ARB_texture_env_add(); // gl
+    void load_extension_GL_ARB_texture_env_combine(); // gl
+    void load_extension_GL_ARB_texture_env_crossbar(); // gl
+    void load_extension_GL_ARB_texture_env_dot3(); // gl
+    void load_extension_GL_ARB_texture_filter_minmax(); // gl
+    void load_extension_GL_ARB_texture_float(); // gl
+    void load_extension_GL_ARB_texture_gather(); // gl|glcore
+    void load_extension_GL_ARB_texture_mirror_clamp_to_edge(); // gl|glcore
+    void load_extension_GL_ARB_texture_mirrored_repeat(); // gl
+    void load_extension_GL_ARB_texture_multisample(); // gl|glcore
+    void load_extension_GL_ARB_texture_non_power_of_two(); // gl
+    void load_extension_GL_ARB_texture_query_levels(); // gl|glcore
+    void load_extension_GL_ARB_texture_query_lod(); // gl|glcore
+    void load_extension_GL_ARB_texture_rectangle(); // gl
+    void load_extension_GL_ARB_texture_rg(); // gl|glcore
+    void load_extension_GL_ARB_texture_rgb10_a2ui(); // gl|glcore
+    void load_extension_GL_ARB_texture_stencil8(); // gl|glcore
+    void load_extension_GL_ARB_texture_storage(); // gl|glcore
+    void load_extension_GL_ARB_texture_storage_multisample(); // gl|glcore
+    void load_extension_GL_ARB_texture_swizzle(); // gl|glcore
+    void load_extension_GL_ARB_texture_view(); // gl|glcore
+    void load_extension_GL_ARB_timer_query(); // gl|glcore
+    void load_extension_GL_ARB_transform_feedback2(); // gl|glcore
+    void load_extension_GL_ARB_transform_feedback3(); // gl|glcore
+    void load_extension_GL_ARB_transform_feedback_instanced(); // gl|glcore
+    void load_extension_GL_ARB_transform_feedback_overflow_query(); // gl|glcore
+    void load_extension_GL_ARB_transpose_matrix(); // gl
+    void load_extension_GL_ARB_uniform_buffer_object(); // gl|glcore
+    void load_extension_GL_ARB_vertex_array_bgra(); // gl|glcore
+    void load_extension_GL_ARB_vertex_array_object(); // gl|glcore
+    void load_extension_GL_ARB_vertex_attrib_64bit(); // gl|glcore
+    void load_extension_GL_ARB_vertex_attrib_binding(); // gl|glcore
+    void load_extension_GL_ARB_vertex_blend(); // gl
+    void load_extension_GL_ARB_vertex_buffer_object(); // gl
+    void load_extension_GL_ARB_vertex_program(); // gl
+    void load_extension_GL_ARB_vertex_shader(); // gl
+    void load_extension_GL_ARB_vertex_type_10f_11f_11f_rev(); // gl|glcore
+    void load_extension_GL_ARB_vertex_type_2_10_10_10_rev(); // gl|glcore
+    void load_extension_GL_ARB_viewport_array(); // gl|glcore
+    void load_extension_GL_ARB_window_pos(); // gl
+    void load_extension_GL_ARM_mali_program_binary(); // gles2
+    void load_extension_GL_ARM_mali_shader_binary(); // gles2
+    void load_extension_GL_ARM_rgba8(); // gles1|gles2
+    void load_extension_GL_ARM_shader_framebuffer_fetch(); // gles2
+    void load_extension_GL_ARM_shader_framebuffer_fetch_depth_stencil(); // gles2
+    void load_extension_GL_ATI_draw_buffers(); // gl
+    void load_extension_GL_ATI_element_array(); // gl
+    void load_extension_GL_ATI_envmap_bumpmap(); // gl
+    void load_extension_GL_ATI_fragment_shader(); // gl
+    void load_extension_GL_ATI_map_object_buffer(); // gl
+    void load_extension_GL_ATI_meminfo(); // gl
+    void load_extension_GL_ATI_pixel_format_float(); // gl
+    void load_extension_GL_ATI_pn_triangles(); // gl
+    void load_extension_GL_ATI_separate_stencil(); // gl
+    void load_extension_GL_ATI_text_fragment_shader(); // gl
+    void load_extension_GL_ATI_texture_env_combine3(); // gl
+    void load_extension_GL_ATI_texture_float(); // gl
+    void load_extension_GL_ATI_texture_mirror_once(); // gl
+    void load_extension_GL_ATI_vertex_array_object(); // gl
+    void load_extension_GL_ATI_vertex_attrib_array_object(); // gl
+    void load_extension_GL_ATI_vertex_streams(); // gl
+    void load_extension_GL_DMP_program_binary(); // gles2
+    void load_extension_GL_DMP_shader_binary(); // gles2
+    void load_extension_GL_EXT_422_pixels(); // gl
+    void load_extension_GL_EXT_YUV_target(); // gles2
+    void load_extension_GL_EXT_abgr(); // gl
+    void load_extension_GL_EXT_base_instance(); // gles2
+    void load_extension_GL_EXT_bgra(); // gl
+    void load_extension_GL_EXT_bindable_uniform(); // gl
+    void load_extension_GL_EXT_blend_color(); // gl
+    void load_extension_GL_EXT_blend_equation_separate(); // gl
+    void load_extension_GL_EXT_blend_func_extended(); // gles2
+    void load_extension_GL_EXT_blend_func_separate(); // gl
+    void load_extension_GL_EXT_blend_logic_op(); // gl
+    void load_extension_GL_EXT_blend_minmax(); // gl|gles1|gles2
+    void load_extension_GL_EXT_blend_subtract(); // gl
+    void load_extension_GL_EXT_buffer_storage(); // gles2
+    void load_extension_GL_EXT_clear_texture(); // gles2
+    void load_extension_GL_EXT_clip_cull_distance(); // gles2
+    void load_extension_GL_EXT_clip_volume_hint(); // gl
+    void load_extension_GL_EXT_cmyka(); // gl
+    void load_extension_GL_EXT_color_buffer_float(); // gles2
+    void load_extension_GL_EXT_color_buffer_half_float(); // gles2
+    void load_extension_GL_EXT_color_subtable(); // gl
+    void load_extension_GL_EXT_compiled_vertex_array(); // gl
+    void load_extension_GL_EXT_conservative_depth(); // gles2
+    void load_extension_GL_EXT_convolution(); // gl
+    void load_extension_GL_EXT_coordinate_frame(); // gl
+    void load_extension_GL_EXT_copy_image(); // gles2
+    void load_extension_GL_EXT_copy_texture(); // gl
+    void load_extension_GL_EXT_cull_vertex(); // gl
+    void load_extension_GL_EXT_debug_label(); // gl|glcore|gles2
+    void load_extension_GL_EXT_debug_marker(); // gl|glcore|gles2
+    void load_extension_GL_EXT_depth_bounds_test(); // gl
+    void load_extension_GL_EXT_direct_state_access(); // gl
+    void load_extension_GL_EXT_discard_framebuffer(); // gles1|gles2
+    void load_extension_GL_EXT_disjoint_timer_query(); // gles2
+    void load_extension_GL_EXT_draw_buffers(); // gles2
+    void load_extension_GL_EXT_draw_buffers2(); // gl
+    void load_extension_GL_EXT_draw_buffers_indexed(); // gles2
+    void load_extension_GL_EXT_draw_elements_base_vertex(); // gles2
+    void load_extension_GL_EXT_draw_instanced(); // gl|glcore|gles2
+    void load_extension_GL_EXT_draw_range_elements(); // gl
+    void load_extension_GL_EXT_draw_transform_feedback(); // gles2
+    void load_extension_GL_EXT_float_blend(); // gles2
+    void load_extension_GL_EXT_fog_coord(); // gl
+    void load_extension_GL_EXT_framebuffer_blit(); // gl
+    void load_extension_GL_EXT_framebuffer_multisample(); // gl
+    void load_extension_GL_EXT_framebuffer_multisample_blit_scaled(); // gl
+    void load_extension_GL_EXT_framebuffer_object(); // gl
+    void load_extension_GL_EXT_framebuffer_sRGB(); // gl
+    void load_extension_GL_EXT_geometry_point_size(); // gles2
+    void load_extension_GL_EXT_geometry_shader(); // gles2
+    void load_extension_GL_EXT_geometry_shader4(); // gl
+    void load_extension_GL_EXT_gpu_program_parameters(); // gl
+    void load_extension_GL_EXT_gpu_shader4(); // gl
+    void load_extension_GL_EXT_gpu_shader5(); // gles2
+    void load_extension_GL_EXT_histogram(); // gl
+    void load_extension_GL_EXT_index_array_formats(); // gl
+    void load_extension_GL_EXT_index_func(); // gl
+    void load_extension_GL_EXT_index_material(); // gl
+    void load_extension_GL_EXT_index_texture(); // gl
+    void load_extension_GL_EXT_instanced_arrays(); // gles2
+    void load_extension_GL_EXT_light_texture(); // gl
+    void load_extension_GL_EXT_map_buffer_range(); // gles1|gles2
+    void load_extension_GL_EXT_misc_attribute(); // gl
+    void load_extension_GL_EXT_multi_draw_arrays(); // gl|gles1|gles2
+    void load_extension_GL_EXT_multi_draw_indirect(); // gles2
+    void load_extension_GL_EXT_multisample(); // gl
+    void load_extension_GL_EXT_multisampled_compatibility(); // gles2
+    void load_extension_GL_EXT_multisampled_render_to_texture(); // gles1|gles2
+    void load_extension_GL_EXT_multiview_draw_buffers(); // gles2
+    void load_extension_GL_EXT_occlusion_query_boolean(); // gles2
+    void load_extension_GL_EXT_packed_depth_stencil(); // gl
+    void load_extension_GL_EXT_packed_float(); // gl
+    void load_extension_GL_EXT_packed_pixels(); // gl
+    void load_extension_GL_EXT_paletted_texture(); // gl
+    void load_extension_GL_EXT_pixel_buffer_object(); // gl
+    void load_extension_GL_EXT_pixel_transform(); // gl
+    void load_extension_GL_EXT_pixel_transform_color_table(); // gl
+    void load_extension_GL_EXT_point_parameters(); // gl
+    void load_extension_GL_EXT_polygon_offset(); // gl
+    void load_extension_GL_EXT_polygon_offset_clamp(); // gl|glcore|gles2
+    void load_extension_GL_EXT_post_depth_coverage(); // gl|glcore|gles2
+    void load_extension_GL_EXT_primitive_bounding_box(); // gles2
+    void load_extension_GL_EXT_protected_textures(); // gles2
+    void load_extension_GL_EXT_provoking_vertex(); // gl
+    void load_extension_GL_EXT_pvrtc_sRGB(); // gles2
+    void load_extension_GL_EXT_raster_multisample(); // gl|glcore|gles2
+    void load_extension_GL_EXT_read_format_bgra(); // gles1|gles2
+    void load_extension_GL_EXT_render_snorm(); // gles2
+    void load_extension_GL_EXT_rescale_normal(); // gl
+    void load_extension_GL_EXT_robustness(); // gles1|gles2
+    void load_extension_GL_EXT_sRGB(); // gles1|gles2
+    void load_extension_GL_EXT_sRGB_write_control(); // gles2
+    void load_extension_GL_EXT_secondary_color(); // gl
+    void load_extension_GL_EXT_separate_shader_objects(); // gl|glcore|gles2
+    void load_extension_GL_EXT_separate_specular_color(); // gl
+    void load_extension_GL_EXT_shader_framebuffer_fetch(); // gles2
+    void load_extension_GL_EXT_shader_group_vote(); // gles2
+    void load_extension_GL_EXT_shader_image_load_formatted(); // gl
+    void load_extension_GL_EXT_shader_image_load_store(); // gl
+    void load_extension_GL_EXT_shader_implicit_conversions(); // gles2
+    void load_extension_GL_EXT_shader_integer_mix(); // gl|glcore|gles2
+    void load_extension_GL_EXT_shader_io_blocks(); // gles2
+    void load_extension_GL_EXT_shader_non_constant_global_initializers(); // gles2
+    void load_extension_GL_EXT_shader_pixel_local_storage(); // gles2
+    void load_extension_GL_EXT_shader_pixel_local_storage2(); // gles2
+    void load_extension_GL_EXT_shader_texture_lod(); // gles2
+    void load_extension_GL_EXT_shadow_funcs(); // gl
+    void load_extension_GL_EXT_shadow_samplers(); // gles2
+    void load_extension_GL_EXT_shared_texture_palette(); // gl
+    void load_extension_GL_EXT_sparse_texture(); // gles2
+    void load_extension_GL_EXT_sparse_texture2(); // gl
+    void load_extension_GL_EXT_stencil_clear_tag(); // gl
+    void load_extension_GL_EXT_stencil_two_side(); // gl
+    void load_extension_GL_EXT_stencil_wrap(); // gl
+    void load_extension_GL_EXT_subtexture(); // gl
+    void load_extension_GL_EXT_tessellation_point_size(); // gles2
+    void load_extension_GL_EXT_tessellation_shader(); // gles2
+    void load_extension_GL_EXT_texture(); // gl
+    void load_extension_GL_EXT_texture3D(); // gl
+    void load_extension_GL_EXT_texture_array(); // gl
+    void load_extension_GL_EXT_texture_border_clamp(); // gles2
+    void load_extension_GL_EXT_texture_buffer(); // gles2
+    void load_extension_GL_EXT_texture_buffer_object(); // gl
+    void load_extension_GL_EXT_texture_compression_dxt1(); // gles1|gles2
+    void load_extension_GL_EXT_texture_compression_latc(); // gl
+    void load_extension_GL_EXT_texture_compression_rgtc(); // gl
+    void load_extension_GL_EXT_texture_compression_s3tc(); // gl|glcore|gles2|glsc2
+    void load_extension_GL_EXT_texture_cube_map(); // gl
+    void load_extension_GL_EXT_texture_cube_map_array(); // gles2
+    void load_extension_GL_EXT_texture_env_add(); // gl
+    void load_extension_GL_EXT_texture_env_combine(); // gl
+    void load_extension_GL_EXT_texture_env_dot3(); // gl
+    void load_extension_GL_EXT_texture_filter_anisotropic(); // gl|gles1|gles2
+    void load_extension_GL_EXT_texture_filter_minmax(); // gl|glcore|gles2
+    void load_extension_GL_EXT_texture_format_BGRA8888(); // gles1|gles2
+    void load_extension_GL_EXT_texture_integer(); // gl
+    void load_extension_GL_EXT_texture_lod_bias(); // gl|gles1
+    void load_extension_GL_EXT_texture_mirror_clamp(); // gl
+    void load_extension_GL_EXT_texture_norm16(); // gles2
+    void load_extension_GL_EXT_texture_object(); // gl
+    void load_extension_GL_EXT_texture_perturb_normal(); // gl
+    void load_extension_GL_EXT_texture_rg(); // gles2
+    void load_extension_GL_EXT_texture_sRGB(); // gl
+    void load_extension_GL_EXT_texture_sRGB_R8(); // gles2
+    void load_extension_GL_EXT_texture_sRGB_RG8(); // gles2
+    void load_extension_GL_EXT_texture_sRGB_decode(); // gl|glcore|gles2
+    void load_extension_GL_EXT_texture_shared_exponent(); // gl
+    void load_extension_GL_EXT_texture_snorm(); // gl
+    void load_extension_GL_EXT_texture_storage(); // gles1|gles2
+    void load_extension_GL_EXT_texture_swizzle(); // gl
+    void load_extension_GL_EXT_texture_type_2_10_10_10_REV(); // gles2
+    void load_extension_GL_EXT_texture_view(); // gles2
+    void load_extension_GL_EXT_timer_query(); // gl
+    void load_extension_GL_EXT_transform_feedback(); // gl
+    void load_extension_GL_EXT_unpack_subimage(); // gles2
+    void load_extension_GL_EXT_vertex_array(); // gl
+    void load_extension_GL_EXT_vertex_array_bgra(); // gl
+    void load_extension_GL_EXT_vertex_attrib_64bit(); // gl
+    void load_extension_GL_EXT_vertex_shader(); // gl
+    void load_extension_GL_EXT_vertex_weighting(); // gl
+    void load_extension_GL_EXT_window_rectangles(); // gl|glcore|gles2
+    void load_extension_GL_EXT_x11_sync_object(); // gl
+    void load_extension_GL_FJ_shader_binary_GCCSO(); // gles2
+    void load_extension_GL_GREMEDY_frame_terminator(); // gl
+    void load_extension_GL_GREMEDY_string_marker(); // gl
+    void load_extension_GL_HP_convolution_border_modes(); // gl
+    void load_extension_GL_HP_image_transform(); // gl
+    void load_extension_GL_HP_occlusion_test(); // gl
+    void load_extension_GL_HP_texture_lighting(); // gl
+    void load_extension_GL_IBM_cull_vertex(); // gl
+    void load_extension_GL_IBM_multimode_draw_arrays(); // gl
+    void load_extension_GL_IBM_rasterpos_clip(); // gl
+    void load_extension_GL_IBM_static_data(); // gl
+    void load_extension_GL_IBM_texture_mirrored_repeat(); // gl
+    void load_extension_GL_IBM_vertex_array_lists(); // gl
+    void load_extension_GL_IMG_bindless_texture(); // gles2
+    void load_extension_GL_IMG_framebuffer_downsample(); // gles2
+    void load_extension_GL_IMG_multisampled_render_to_texture(); // gles1|gles2
+    void load_extension_GL_IMG_program_binary(); // gles2
+    void load_extension_GL_IMG_read_format(); // gles1|gles2
+    void load_extension_GL_IMG_shader_binary(); // gles2
+    void load_extension_GL_IMG_texture_compression_pvrtc(); // gles1|gles2
+    void load_extension_GL_IMG_texture_compression_pvrtc2(); // gles2
+    void load_extension_GL_IMG_texture_env_enhanced_fixed_function(); // gles1
+    void load_extension_GL_IMG_texture_filter_cubic(); // gles2
+    void load_extension_GL_IMG_user_clip_plane(); // gles1
+    void load_extension_GL_INGR_blend_func_separate(); // gl
+    void load_extension_GL_INGR_color_clamp(); // gl
+    void load_extension_GL_INGR_interlace_read(); // gl
+    void load_extension_GL_INTEL_conservative_rasterization(); // gl|glcore|gles2
+    void load_extension_GL_INTEL_fragment_shader_ordering(); // gl
+    void load_extension_GL_INTEL_framebuffer_CMAA(); // gl|glcore|gles2
+    void load_extension_GL_INTEL_map_texture(); // gl
+    void load_extension_GL_INTEL_parallel_arrays(); // gl
+    void load_extension_GL_INTEL_performance_query(); // gl|glcore|gles2
+    void load_extension_GL_KHR_blend_equation_advanced(); // gl|glcore|gles2
+    void load_extension_GL_KHR_blend_equation_advanced_coherent(); // gl|glcore|gles2
+    void load_extension_GL_KHR_context_flush_control(); // gl|glcore|gles2
+    void load_extension_GL_KHR_debug(); // gl|glcore|gles2
+    void load_extension_GL_KHR_no_error(); // gl|glcore|gles2
+    void load_extension_GL_KHR_robust_buffer_access_behavior(); // gl|glcore|gles2
+    void load_extension_GL_KHR_robustness(); // gl|glcore|gles2
+    void load_extension_GL_KHR_texture_compression_astc_hdr(); // gl|glcore|gles2
+    void load_extension_GL_KHR_texture_compression_astc_ldr(); // gl|glcore|gles2
+    void load_extension_GL_KHR_texture_compression_astc_sliced_3d(); // gl|glcore|gles2
+    void load_extension_GL_MESAX_texture_stack(); // gl
+    void load_extension_GL_MESA_pack_invert(); // gl
+    void load_extension_GL_MESA_resize_buffers(); // gl
+    void load_extension_GL_MESA_window_pos(); // gl
+    void load_extension_GL_MESA_ycbcr_texture(); // gl
+    void load_extension_GL_NVX_conditional_render(); // gl
+    void load_extension_GL_NVX_gpu_memory_info(); // gl
+    void load_extension_GL_NV_bindless_multi_draw_indirect(); // gl
+    void load_extension_GL_NV_bindless_multi_draw_indirect_count(); // gl
+    void load_extension_GL_NV_bindless_texture(); // gl|glcore|gles2
+    void load_extension_GL_NV_blend_equation_advanced(); // gl|glcore|gles2
+    void load_extension_GL_NV_blend_equation_advanced_coherent(); // gl|glcore|gles2
+    void load_extension_GL_NV_blend_square(); // gl
+    void load_extension_GL_NV_clip_space_w_scaling(); // gl
+    void load_extension_GL_NV_command_list(); // gl
+    void load_extension_GL_NV_compute_program5(); // gl
+    void load_extension_GL_NV_conditional_render(); // gl|glcore|gles2
+    void load_extension_GL_NV_conservative_raster(); // gl|glcore|gles2
+    void load_extension_GL_NV_conservative_raster_dilate(); // gl
+    void load_extension_GL_NV_conservative_raster_pre_snap_triangles(); // gl|glcore|gles2
+    void load_extension_GL_NV_copy_buffer(); // gles2
+    void load_extension_GL_NV_copy_depth_to_color(); // gl
+    void load_extension_GL_NV_copy_image(); // gl
+    void load_extension_GL_NV_coverage_sample(); // gles2
+    void load_extension_GL_NV_deep_texture3D(); // gl
+    void load_extension_GL_NV_depth_buffer_float(); // gl
+    void load_extension_GL_NV_depth_clamp(); // gl
+    void load_extension_GL_NV_depth_nonlinear(); // gles2
+    void load_extension_GL_NV_draw_buffers(); // gles2
+    void load_extension_GL_NV_draw_instanced(); // gles2
+    void load_extension_GL_NV_draw_texture(); // gl
+    void load_extension_GL_NV_evaluators(); // gl
+    void load_extension_GL_NV_explicit_attrib_location(); // gles2
+    void load_extension_GL_NV_explicit_multisample(); // gl
+    void load_extension_GL_NV_fbo_color_attachments(); // gles2
+    void load_extension_GL_NV_fence(); // gl|gles1|gles2
+    void load_extension_GL_NV_fill_rectangle(); // gl|glcore|gles2
+    void load_extension_GL_NV_float_buffer(); // gl
+    void load_extension_GL_NV_fog_distance(); // gl
+    void load_extension_GL_NV_fragment_coverage_to_color(); // gl|glcore|gles2
+    void load_extension_GL_NV_fragment_program(); // gl
+    void load_extension_GL_NV_fragment_program2(); // gl
+    void load_extension_GL_NV_fragment_program4(); // gl
+    void load_extension_GL_NV_fragment_program_option(); // gl
+    void load_extension_GL_NV_fragment_shader_interlock(); // gl|glcore|gles2
+    void load_extension_GL_NV_framebuffer_blit(); // gles2
+    void load_extension_GL_NV_framebuffer_mixed_samples(); // gl|glcore|gles2
+    void load_extension_GL_NV_framebuffer_multisample(); // gles2
+    void load_extension_GL_NV_framebuffer_multisample_coverage(); // gl
+    void load_extension_GL_NV_generate_mipmap_sRGB(); // gles2
+    void load_extension_GL_NV_geometry_program4(); // gl
+    void load_extension_GL_NV_geometry_shader4(); // gl
+    void load_extension_GL_NV_geometry_shader_passthrough(); // gl|glcore|gles2
+    void load_extension_GL_NV_gpu_program4(); // gl
+    void load_extension_GL_NV_gpu_program5(); // gl
+    void load_extension_GL_NV_gpu_program5_mem_extended(); // gl
+    void load_extension_GL_NV_gpu_shader5(); // gl|glcore|gles2
+    void load_extension_GL_NV_half_float(); // gl
+    void load_extension_GL_NV_image_formats(); // gles2
+    void load_extension_GL_NV_instanced_arrays(); // gles2
+    void load_extension_GL_NV_internalformat_sample_query(); // gl|glcore|gles2
+    void load_extension_GL_NV_light_max_exponent(); // gl
+    void load_extension_GL_NV_multisample_coverage(); // gl
+    void load_extension_GL_NV_multisample_filter_hint(); // gl
+    void load_extension_GL_NV_non_square_matrices(); // gles2
+    void load_extension_GL_NV_occlusion_query(); // gl
+    void load_extension_GL_NV_packed_depth_stencil(); // gl
+    void load_extension_GL_NV_parameter_buffer_object(); // gl
+    void load_extension_GL_NV_parameter_buffer_object2(); // gl
+    void load_extension_GL_NV_path_rendering(); // gl|glcore|gles2
+    void load_extension_GL_NV_path_rendering_shared_edge(); // gl|glcore|gles2
+    void load_extension_GL_NV_pixel_data_range(); // gl
+    void load_extension_GL_NV_point_sprite(); // gl
+    void load_extension_GL_NV_polygon_mode(); // gles2
+    void load_extension_GL_NV_present_video(); // gl
+    void load_extension_GL_NV_primitive_restart(); // gl
+    void load_extension_GL_NV_read_buffer(); // gles2
+    void load_extension_GL_NV_read_buffer_front(); // gles2
+    void load_extension_GL_NV_read_depth(); // gles2
+    void load_extension_GL_NV_read_depth_stencil(); // gles2
+    void load_extension_GL_NV_read_stencil(); // gles2
+    void load_extension_GL_NV_register_combiners(); // gl
+    void load_extension_GL_NV_register_combiners2(); // gl
+    void load_extension_GL_NV_robustness_video_memory_purge(); // gl
+    void load_extension_GL_NV_sRGB_formats(); // gles2
+    void load_extension_GL_NV_sample_locations(); // gl|glcore|gles2
+    void load_extension_GL_NV_sample_mask_override_coverage(); // gl|glcore|gles2
+    void load_extension_GL_NV_shader_atomic_counters(); // gl
+    void load_extension_GL_NV_shader_atomic_float(); // gl
+    void load_extension_GL_NV_shader_atomic_float64(); // gl
+    void load_extension_GL_NV_shader_atomic_fp16_vector(); // gl|glcore|gles2
+    void load_extension_GL_NV_shader_atomic_int64(); // gl
+    void load_extension_GL_NV_shader_buffer_load(); // gl
+    void load_extension_GL_NV_shader_buffer_store(); // gl
+    void load_extension_GL_NV_shader_noperspective_interpolation(); // gles2
+    void load_extension_GL_NV_shader_storage_buffer_object(); // gl
+    void load_extension_GL_NV_shader_thread_group(); // gl
+    void load_extension_GL_NV_shader_thread_shuffle(); // gl
+    void load_extension_GL_NV_shadow_samplers_array(); // gles2
+    void load_extension_GL_NV_shadow_samplers_cube(); // gles2
+    void load_extension_GL_NV_stereo_view_rendering(); // gl
+    void load_extension_GL_NV_tessellation_program5(); // gl
+    void load_extension_GL_NV_texgen_emboss(); // gl
+    void load_extension_GL_NV_texgen_reflection(); // gl
+    void load_extension_GL_NV_texture_barrier(); // gl
+    void load_extension_GL_NV_texture_border_clamp(); // gles2
+    void load_extension_GL_NV_texture_compression_s3tc_update(); // gles2
+    void load_extension_GL_NV_texture_compression_vtc(); // gl
+    void load_extension_GL_NV_texture_env_combine4(); // gl
+    void load_extension_GL_NV_texture_expand_normal(); // gl
+    void load_extension_GL_NV_texture_multisample(); // gl
+    void load_extension_GL_NV_texture_npot_2D_mipmap(); // gles2
+    void load_extension_GL_NV_texture_rectangle(); // gl
+    void load_extension_GL_NV_texture_shader(); // gl
+    void load_extension_GL_NV_texture_shader2(); // gl
+    void load_extension_GL_NV_texture_shader3(); // gl
+    void load_extension_GL_NV_transform_feedback(); // gl
+    void load_extension_GL_NV_transform_feedback2(); // gl
+    void load_extension_GL_NV_uniform_buffer_unified_memory(); // gl
+    void load_extension_GL_NV_vdpau_interop(); // gl
+    void load_extension_GL_NV_vertex_array_range(); // gl
+    void load_extension_GL_NV_vertex_array_range2(); // gl
+    void load_extension_GL_NV_vertex_attrib_integer_64bit(); // gl
+    void load_extension_GL_NV_vertex_buffer_unified_memory(); // gl
+    void load_extension_GL_NV_vertex_program(); // gl
+    void load_extension_GL_NV_vertex_program1_1(); // gl
+    void load_extension_GL_NV_vertex_program2(); // gl
+    void load_extension_GL_NV_vertex_program2_option(); // gl
+    void load_extension_GL_NV_vertex_program3(); // gl
+    void load_extension_GL_NV_vertex_program4(); // gl
+    void load_extension_GL_NV_video_capture(); // gl
+    void load_extension_GL_NV_viewport_array(); // gles2
+    void load_extension_GL_NV_viewport_array2(); // gl|glcore|gles2
+    void load_extension_GL_NV_viewport_swizzle(); // gl|glcore|gles2
+    void load_extension_GL_OES_EGL_image(); // gles1|gles2
+    void load_extension_GL_OES_EGL_image_external(); // gles1|gles2
+    void load_extension_GL_OES_EGL_image_external_essl3(); // gles2
+    void load_extension_GL_OES_blend_equation_separate(); // gles1
+    void load_extension_GL_OES_blend_func_separate(); // gles1
+    void load_extension_GL_OES_blend_subtract(); // gles1
+    void load_extension_GL_OES_byte_coordinates(); // gl|gles1
+    void load_extension_GL_OES_compressed_ETC1_RGB8_sub_texture(); // gles1|gles2
+    void load_extension_GL_OES_compressed_ETC1_RGB8_texture(); // gles1|gles2
+    void load_extension_GL_OES_compressed_paletted_texture(); // gl|gles1|gles2
+    void load_extension_GL_OES_copy_image(); // gles2
+    void load_extension_GL_OES_depth24(); // gles1|gles2|glsc2
+    void load_extension_GL_OES_depth32(); // gles1|gles2|glsc2
+    void load_extension_GL_OES_depth_texture(); // gles2
+    void load_extension_GL_OES_draw_buffers_indexed(); // gles2
+    void load_extension_GL_OES_draw_elements_base_vertex(); // gles2
+    void load_extension_GL_OES_draw_texture(); // gles1
+    void load_extension_GL_OES_element_index_uint(); // gles1|gles2
+    void load_extension_GL_OES_extended_matrix_palette(); // gles1
+    void load_extension_GL_OES_fbo_render_mipmap(); // gles1|gles2
+    void load_extension_GL_OES_fixed_point(); // gl|gles1
+    void load_extension_GL_OES_fragment_precision_high(); // gles2
+    void load_extension_GL_OES_framebuffer_object(); // gles1
+    void load_extension_GL_OES_geometry_point_size(); // gles2
+    void load_extension_GL_OES_geometry_shader(); // gles2
+    void load_extension_GL_OES_get_program_binary(); // gles2
+    void load_extension_GL_OES_gpu_shader5(); // gles2
+    void load_extension_GL_OES_mapbuffer(); // gles1|gles2
+    void load_extension_GL_OES_matrix_get(); // gles1
+    void load_extension_GL_OES_matrix_palette(); // gles1
+    void load_extension_GL_OES_packed_depth_stencil(); // gles1|gles2
+    void load_extension_GL_OES_point_size_array(); // gles1
+    void load_extension_GL_OES_point_sprite(); // gles1
+    void load_extension_GL_OES_primitive_bounding_box(); // gles2
+    void load_extension_GL_OES_query_matrix(); // gl|gles1
+    void load_extension_GL_OES_read_format(); // gl|gles1
+    void load_extension_GL_OES_required_internalformat(); // gles1|gles2
+    void load_extension_GL_OES_rgb8_rgba8(); // gles1|gles2|glsc2
+    void load_extension_GL_OES_sample_shading(); // gles2
+    void load_extension_GL_OES_sample_variables(); // gles2
+    void load_extension_GL_OES_shader_image_atomic(); // gles2
+    void load_extension_GL_OES_shader_io_blocks(); // gles2
+    void load_extension_GL_OES_shader_multisample_interpolation(); // gles2
+    void load_extension_GL_OES_single_precision(); // gl|gles1
+    void load_extension_GL_OES_standard_derivatives(); // gles2|glsc2
+    void load_extension_GL_OES_stencil1(); // gles1|gles2
+    void load_extension_GL_OES_stencil4(); // gles1|gles2
+    void load_extension_GL_OES_stencil8(); // gles1
+    void load_extension_GL_OES_stencil_wrap(); // gles1
+    void load_extension_GL_OES_surfaceless_context(); // gles2
+    void load_extension_GL_OES_tessellation_point_size(); // gles2
+    void load_extension_GL_OES_tessellation_shader(); // gles2
+    void load_extension_GL_OES_texture_3D(); // gles2
+    void load_extension_GL_OES_texture_border_clamp(); // gles2
+    void load_extension_GL_OES_texture_buffer(); // gles2
+    void load_extension_GL_OES_texture_compression_astc(); // gles2
+    void load_extension_GL_OES_texture_cube_map(); // gles1
+    void load_extension_GL_OES_texture_cube_map_array(); // gles2
+    void load_extension_GL_OES_texture_env_crossbar(); // gles1
+    void load_extension_GL_OES_texture_float(); // gles2
+    void load_extension_GL_OES_texture_float_linear(); // gles2
+    void load_extension_GL_OES_texture_half_float(); // gles2
+    void load_extension_GL_OES_texture_half_float_linear(); // gles2
+    void load_extension_GL_OES_texture_mirrored_repeat(); // gles1
+    void load_extension_GL_OES_texture_npot(); // gles2
+    void load_extension_GL_OES_texture_stencil8(); // gles2
+    void load_extension_GL_OES_texture_storage_multisample_2d_array(); // gles2
+    void load_extension_GL_OES_texture_view(); // gles2
+    void load_extension_GL_OES_vertex_array_object(); // gles1|gles2
+    void load_extension_GL_OES_vertex_half_float(); // gles2
+    void load_extension_GL_OES_vertex_type_10_10_10_2(); // gles2
+    void load_extension_GL_OES_viewport_array(); // gles2
+    void load_extension_GL_OML_interlace(); // gl
+    void load_extension_GL_OML_resample(); // gl
+    void load_extension_GL_OML_subsample(); // gl
+    void load_extension_GL_OVR_multiview(); // gl|glcore|gles2
+    void load_extension_GL_OVR_multiview2(); // gl|glcore|gles2
+    void load_extension_GL_OVR_multiview_multisampled_render_to_texture(); // gles2
+    void load_extension_GL_PGI_misc_hints(); // gl
+    void load_extension_GL_PGI_vertex_hints(); // gl
+    void load_extension_GL_QCOM_alpha_test(); // gles2
+    void load_extension_GL_QCOM_binning_control(); // gles2
+    void load_extension_GL_QCOM_driver_control(); // gles1|gles2
+    void load_extension_GL_QCOM_extended_get(); // gles1|gles2
+    void load_extension_GL_QCOM_extended_get2(); // gles1|gles2
+    void load_extension_GL_QCOM_perfmon_global_mode(); // gles1|gles2
+    void load_extension_GL_QCOM_tiled_rendering(); // gles1|gles2
+    void load_extension_GL_QCOM_writeonly_rendering(); // gles1|gles2
+    void load_extension_GL_REND_screen_coordinates(); // gl
+    void load_extension_GL_S3_s3tc(); // gl
+    void load_extension_GL_SGIS_detail_texture(); // gl
+    void load_extension_GL_SGIS_fog_function(); // gl
+    void load_extension_GL_SGIS_generate_mipmap(); // gl
+    void load_extension_GL_SGIS_multisample(); // gl
+    void load_extension_GL_SGIS_pixel_texture(); // gl
+    void load_extension_GL_SGIS_point_line_texgen(); // gl
+    void load_extension_GL_SGIS_point_parameters(); // gl
+    void load_extension_GL_SGIS_sharpen_texture(); // gl
+    void load_extension_GL_SGIS_texture4D(); // gl
+    void load_extension_GL_SGIS_texture_border_clamp(); // gl
+    void load_extension_GL_SGIS_texture_color_mask(); // gl
+    void load_extension_GL_SGIS_texture_edge_clamp(); // gl
+    void load_extension_GL_SGIS_texture_filter4(); // gl
+    void load_extension_GL_SGIS_texture_lod(); // gl
+    void load_extension_GL_SGIS_texture_select(); // gl
+    void load_extension_GL_SGIX_async(); // gl
+    void load_extension_GL_SGIX_async_histogram(); // gl
+    void load_extension_GL_SGIX_async_pixel(); // gl
+    void load_extension_GL_SGIX_blend_alpha_minmax(); // gl
+    void load_extension_GL_SGIX_calligraphic_fragment(); // gl
+    void load_extension_GL_SGIX_clipmap(); // gl
+    void load_extension_GL_SGIX_convolution_accuracy(); // gl
+    void load_extension_GL_SGIX_depth_pass_instrument(); // gl
+    void load_extension_GL_SGIX_depth_texture(); // gl
+    void load_extension_GL_SGIX_flush_raster(); // gl
+    void load_extension_GL_SGIX_fog_offset(); // gl
+    void load_extension_GL_SGIX_fragment_lighting(); // gl
+    void load_extension_GL_SGIX_framezoom(); // gl
+    void load_extension_GL_SGIX_igloo_interface(); // gl
+    void load_extension_GL_SGIX_instruments(); // gl
+    void load_extension_GL_SGIX_interlace(); // gl
+    void load_extension_GL_SGIX_ir_instrument1(); // gl
+    void load_extension_GL_SGIX_list_priority(); // gl
+    void load_extension_GL_SGIX_pixel_texture(); // gl
+    void load_extension_GL_SGIX_pixel_tiles(); // gl
+    void load_extension_GL_SGIX_polynomial_ffd(); // gl
+    void load_extension_GL_SGIX_reference_plane(); // gl
+    void load_extension_GL_SGIX_resample(); // gl
+    void load_extension_GL_SGIX_scalebias_hint(); // gl
+    void load_extension_GL_SGIX_shadow(); // gl
+    void load_extension_GL_SGIX_shadow_ambient(); // gl
+    void load_extension_GL_SGIX_sprite(); // gl
+    void load_extension_GL_SGIX_subsample(); // gl
+    void load_extension_GL_SGIX_tag_sample_buffer(); // gl
+    void load_extension_GL_SGIX_texture_add_env(); // gl
+    void load_extension_GL_SGIX_texture_coordinate_clamp(); // gl
+    void load_extension_GL_SGIX_texture_lod_bias(); // gl
+    void load_extension_GL_SGIX_texture_multi_buffer(); // gl
+    void load_extension_GL_SGIX_texture_scale_bias(); // gl
+    void load_extension_GL_SGIX_vertex_preclip(); // gl
+    void load_extension_GL_SGIX_ycrcb(); // gl
+    void load_extension_GL_SGIX_ycrcb_subsample(); // gl
+    void load_extension_GL_SGIX_ycrcba(); // gl
+    void load_extension_GL_SGI_color_matrix(); // gl
+    void load_extension_GL_SGI_color_table(); // gl
+    void load_extension_GL_SGI_texture_color_table(); // gl
+    void load_extension_GL_SUNX_constant_data(); // gl
+    void load_extension_GL_SUN_convolution_border_modes(); // gl
+    void load_extension_GL_SUN_global_alpha(); // gl
+    void load_extension_GL_SUN_mesh_array(); // gl
+    void load_extension_GL_SUN_slice_accum(); // gl
+    void load_extension_GL_SUN_triangle_list(); // gl
+    void load_extension_GL_SUN_vertex(); // gl
+    void load_extension_GL_VIV_shader_binary(); // gles2
+    void load_extension_GL_WIN_phong_shading(); // gl
+    void load_extension_GL_WIN_specular_fog(); // gl
+}
 
 #define GL_CURRENT_BIT                                            0x00000001
 #define GL_POINT_BIT                                              0x00000002
