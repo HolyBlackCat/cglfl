@@ -1,5 +1,5 @@
 /*
-  OpenGL Function Loader (GLFL) v1.2.0
+  OpenGL Function Loader (GLFL) v1.2.1
   Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
@@ -145,7 +145,7 @@ namespace glfl
             inline void print_name(int index)
             {
                 const auto &info = get_function_info(index);
-                print((std::string("    ") + info.name + (info.param_names[0][0] ? " (...)" : " ()")).c_str());
+                print((std::string("    ") + info.name).c_str());
             }
 
             template <typename ...P> void print_params(int index, const P &... params)
@@ -171,7 +171,7 @@ namespace glfl
                     print_name(Index);
                     print_params(Index, args...);
 
-                    if (active_context()->ptrs[Index])
+                    if (active_context()->ptrs[Index] && active_context()->ptrs[Index] != active_context()->ptrs[0])
                     {
                         ReturnType ret = ((ReturnType (GLFL_API *)(ParamTypes...))active_context()->ptrs[Index])(args...);
                         print_result(Index, ret);
@@ -197,7 +197,7 @@ namespace glfl
                     print_name(Index);
                     print_params(Index, args...);
 
-                    if (active_context()->ptrs[Index])
+                    if (active_context()->ptrs[Index] && active_context()->ptrs[Index] != active_context()->ptrs[0])
                     {
                         ((void (GLFL_API *)(ParamTypes...))active_context()->ptrs[Index])(args...);
                         errors();
