@@ -1,4 +1,4 @@
-#  OpenGL Function Loader (GLFL) v1.2.1 (generator script)
+#  OpenGL Function Loader (GLFL) v1.2.2 (generator script)
 #  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
 #
 #  This software is provided '"'"'as-is'"'"', without any express or implied
@@ -141,6 +141,7 @@ echo >out/GLFL/glfl.h \
 #ifndef GLFL_H_INCLUDED
 #define GLFL_H_INCLUDED
 
+#include <cstddef>
 #include <cstdint>
 
 #ifdef GLFL_ENABLE_PROXY
@@ -897,7 +898,7 @@ echo >>out/glfl.cpp '            };
 # License
 cd out
 find -regextype posix-extended -regex '.*\.(h|cpp)' -exec perl -pi -e 's|___LICENSE_TEXT_HERE___|/*
-  OpenGL Function Loader (GLFL) v1.2.1
+  OpenGL Function Loader (GLFL) v1.2.2
   Copyright (C) 2017 Egor Mikhailov <blckcat\@inbox.ru>
 
   This software is provided '"'"'as-is'"'"', without any express or implied
