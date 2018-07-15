@@ -1,6 +1,6 @@
 /*
-  OpenGL Function Loader (GLFL) v1.2.2
-  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
+  OpenGL Function Loader (GLFL) v1.2.3
+  Copyright (C) 2017-2018 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -151,21 +151,21 @@ namespace glfl
         }
 
 
-        static unsigned long long draw_calls = 0;
+        static unsigned long long calls = 0;
 
-        unsigned long long draw_call_count()
+        unsigned long long call_count()
         {
-            return draw_calls;
+            return calls;
         }
-        void reset_draw_call_count()
+        void reset_call_count()
         {
-            if (draw_calls != 0)
-                message(("Draw calls == " + std::to_string(draw_calls)).c_str());
-            draw_calls = 0;
+            if (calls != 0)
+                message(("OpenGL calls == " + std::to_string(calls)).c_str());
+            calls = 0;
         }
-        void incr_draw_call_count()
+        void incr_call_count()
         {
-            draw_calls++;
+            calls++;
         }
 
 

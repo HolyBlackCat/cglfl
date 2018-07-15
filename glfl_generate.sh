@@ -1,5 +1,5 @@
-#  OpenGL Function Loader (GLFL) v1.2.2 (generator script)
-#  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
+#  OpenGL Function Loader (GLFL) v1.2.3 (generator script)
+#  Copyright (C) 2017-2018 Egor Mikhailov <blckcat@inbox.ru>
 #
 #  This software is provided '"'"'as-is'"'"', without any express or implied
 #  warranty.  In no event will the authors be held liable for any damages
@@ -331,9 +331,9 @@ echo >>out/GLFL/glfl.h \
 
         /* This is incremented each time a GL function is called.
          * The default value is 0. Feel free to reset it. */
-        GLFL_NODISCARD unsigned long long draw_call_count();
-        /*msg*/ void reset_draw_call_count();
-        /*internal*/ void incr_draw_call_count();
+        GLFL_NODISCARD unsigned long long call_count();
+        /*msg*/ void reset_call_count();
+        /*internal*/ void incr_call_count();
 
 
         /* The location of the last call.
@@ -560,7 +560,7 @@ namespace glfl
                         ReturnType ret = ((ReturnType (GLFL_API *)(ParamTypes...))active_context()->ptrs[Index])(args...);
                         print_result(Index, ret);
                         errors();
-                        incr_draw_call_count();
+                        incr_call_count();
                         return ret;
                     }
                     else
@@ -585,7 +585,7 @@ namespace glfl
                     {
                         ((void (GLFL_API *)(ParamTypes...))active_context()->ptrs[Index])(args...);
                         errors();
-                        incr_draw_call_count();
+                        incr_call_count();
                     }
                     else
                         error("NOT LOADED");
@@ -761,21 +761,21 @@ namespace glfl
         }
 
 
-        static unsigned long long draw_calls = 0;
+        static unsigned long long calls = 0;
 
-        unsigned long long draw_call_count()
+        unsigned long long call_count()
         {
-            return draw_calls;
+            return calls;
         }
-        void reset_draw_call_count()
+        void reset_call_count()
         {
-            if (draw_calls != 0)
-                message(("Draw calls == " + std::to_string(draw_calls)).c_str());
-            draw_calls = 0;
+            if (calls != 0)
+                message(("OpenGL calls == " + std::to_string(calls)).c_str());
+            calls = 0;
         }
-        void incr_draw_call_count()
+        void incr_call_count()
         {
-            draw_calls++;
+            calls++;
         }
 
 
@@ -898,8 +898,8 @@ echo >>out/glfl.cpp '            };
 # License
 cd out
 find -regextype posix-extended -regex '.*\.(h|cpp)' -exec perl -pi -e 's|___LICENSE_TEXT_HERE___|/*
-  OpenGL Function Loader (GLFL) v1.2.2
-  Copyright (C) 2017 Egor Mikhailov <blckcat\@inbox.ru>
+  OpenGL Function Loader (GLFL) v1.2.3
+  Copyright (C) 2017-2018 Egor Mikhailov <blckcat\@inbox.ru>
 
   This software is provided '"'"'as-is'"'"', without any express or implied
   warranty.  In no event will the authors be held liable for any damages

@@ -1,6 +1,6 @@
 /*
-  OpenGL Function Loader (GLFL) v1.2.2
-  Copyright (C) 2017 Egor Mikhailov <blckcat@inbox.ru>
+  OpenGL Function Loader (GLFL) v1.2.3
+  Copyright (C) 2017-2018 Egor Mikhailov <blckcat@inbox.ru>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -257,9 +257,9 @@ namespace glfl
 
         /* This is incremented each time a GL function is called.
          * The default value is 0. Feel free to reset it. */
-        GLFL_NODISCARD unsigned long long draw_call_count();
-        /*msg*/ void reset_draw_call_count();
-        /*internal*/ void incr_draw_call_count();
+        GLFL_NODISCARD unsigned long long call_count();
+        /*msg*/ void reset_call_count();
+        /*internal*/ void incr_call_count();
 
 
         /* The location of the last call.
