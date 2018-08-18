@@ -24,8 +24,6 @@
 			<Add option="-std=c++2a" />
 		</Compiler>
 		<Unit filename="glfl_generate.cpp" />
-		<Unit filename="tinyxml2.cpp" />
-		<Unit filename="tinyxml2.h" />
 		<Extensions>
 			<code_completion />
 			<envvars />
