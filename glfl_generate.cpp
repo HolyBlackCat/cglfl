@@ -408,12 +408,19 @@ struct Element
                 func(elem);
     }
 
-    std::string GetContainedText() const // If it's a text node, returns the contents. If it's a tag, it has to have a single text node in it, which contents will be returned. Otherwise the function generates a error.
+    std::string GetTextNodeText() const // If it's a text node, returns the contents. Otherwise generates a error.
+    {
+        if (is_tag)
+            Error(Str("Expected `", FullName(), "` to be a text node."));
+        return value;
+    }
+
+    std::string GetContainedText() const // If it's a text node, returns the contents. If it's a tag, it has to have a single text node in it, which contents will be returned. Otherwise generates a error.
     {
         if (!is_tag)
             return value;
         if (elements.size() != 1 || elements.front().is_tag)
-            Error(Str("Expected `", FullName(), "` to be a text node or to have a single text node in it."));
+            Error(Str("Expected `", FullName(), "` to be a text node or a tag with a single text node in it."));
         return elements.front().value;
     }
 
@@ -445,6 +452,7 @@ Element ParseTokens(const std::vector<Token> &tokens)
     Element root_element;
 
     std::vector<Element *> stack = {&root_element}; // There is no danger of ending the root tag, since empty tag names are catched earlier.
+    std::vector<int> index_stack = {0};
 
     for (const auto &token : tokens)
     {
@@ -460,16 +468,18 @@ Element ParseTokens(const std::vector<Token> &tokens)
                 obj.is_tag = 1;
                 obj.value = token.value;
                 obj.attributes = token.attributes;
-                for (const auto &it : stack)
+                for (std::size_t i = 0; i < stack.size(); i++)
                 {
-                    if (it->value.empty())
+                    if (stack[i]->value.empty())
                         continue;
-                    obj.location += it->value;
-                    obj.location += '/';
+                    obj.location += Str(stack[i]->value, "(", index_stack[i], ")/");
                 }
 
                 if (token.type != Token::tag_terse)
+                {
                     stack.push_back(&obj);
+                    index_stack.push_back(parent.elements.size()-1);
+                }
             }
             break;
           case Token::tag_end:
@@ -477,6 +487,7 @@ Element ParseTokens(const std::vector<Token> &tokens)
                 if (token.value != stack.back()->value)
                     Error(Str("Closing tag `</", token.value, ">` has no matching opening tag."));
                 stack.pop_back();
+                index_stack.pop_back();
             }
             break;
           case Token::text:
@@ -487,12 +498,11 @@ Element ParseTokens(const std::vector<Token> &tokens)
                 auto &obj = parent.elements.back();
                 obj.is_tag = 0;
                 obj.value = token.value;
-                for (const auto &it : stack)
+                for (std::size_t i = 0; i < stack.size(); i++)
                 {
-                    if (it->value.empty())
+                    if (stack[i]->value.empty())
                         continue;
-                    obj.location += it->value;
-                    obj.location += '/';
+                    obj.location += Str(stack[i]->value, "(", index_stack[i], ")/");
                 }
             }
             break;
@@ -514,7 +524,7 @@ std::string ExtractTypes(const Element &root_element)
     std::string ret;
 
     // Get the types.
-    auto loc = root_element.GetChild("registry").GetChild("types");
+    const auto &loc = root_element.GetChild("registry").GetChild("types");
     for (const auto &elem : loc.elements)
     {
         if (!elem.IsTagNamed("type"))
@@ -680,6 +690,8 @@ EnumData ExtractEnums(const Element &root_element)
         enum_data.categories.insert({std::move(name), std::move(contents)});
     });
 
+    std::set<std::string> name_set;
+
     // Extract groups.
     root_element.GetChild("registry").ForEachChildNamed("enums", [&](const Element &elem)
     {
@@ -699,6 +711,13 @@ EnumData ExtractEnums(const Element &root_element)
 
             // Get name.
             this_element.name = elem.GetAttribute("name");
+
+            // Delete this element if it's a duplicate
+            if (!name_set.insert(this_element.name).second)
+            {
+                this_group.elements.pop_back();
+                return;
+            }
 
             // Get value.
             this_element.value = elem.GetAttribute("value");
@@ -731,6 +750,108 @@ EnumData ExtractEnums(const Element &root_element)
 
     return enum_data;
 }
+
+
+struct FunctionParam
+{
+    std::string type;
+    std::string name;
+    std::string category; // Can be empty.
+};
+
+struct Function
+{
+    std::string name;
+    std::string return_type;
+    std::vector<FunctionParam> params;
+};
+
+struct FunctionData
+{
+    std::vector<Function> functions;
+
+    void PrettyPrint(std::ostream &stream) const
+    {
+        stream << "functions {\n";
+
+        for (const auto &func : functions)
+        {
+            stream << "    " << func.name << " : " << func.return_type << " (\n";
+
+            for (const auto &param : func.params)
+            {
+                stream << "        " << param.name << " : " << param.type;
+                if (param.category.size() > 0)
+                    stream << " (" << param.category << ')';
+                stream << '\n';
+            }
+
+            stream << "    }\n";
+        }
+
+        stream << "}\n";
+    }
+};
+
+FunctionData ExtractFunctions(const Element &root_element)
+{
+    const auto &loc = root_element.GetChild("registry").GetChild("commands");
+
+    FunctionData func_data;
+
+    loc.ForEachChildNamed("command", [&](const Element &elem)
+    {
+        // Construct the function.
+        func_data.functions.push_back({});
+        auto &this_func = func_data.functions.back();
+
+        // Make sure the format is correct.
+        const auto &proto = elem.GetChild("proto");
+
+        // Get name.
+        this_func.name = proto.GetChild("name").GetContainedText();
+
+        // Get return type.
+        for (const auto &return_type_part : proto.elements)
+        {
+            if (!return_type_part.IsTagNamed("name") && !return_type_part.value.empty())
+            {
+                if (this_func.return_type.size() > 0)
+                    this_func.return_type += ' ';
+                this_func.return_type += return_type_part.GetContainedText();
+            }
+        }
+
+        // Get parameters.
+        elem.ForEachChildNamed("param", [&](const Element &elem)
+        {
+            // Construct the parameter.
+            this_func.params.push_back({});
+            auto &this_param = this_func.params.back();
+
+            // Get type.
+            for (const auto &param_type_part : elem.elements)
+            {
+                if (!param_type_part.IsTagNamed("name") && !param_type_part.value.empty())
+                {
+                    if (this_param.type.size() > 0)
+                        this_param.type += ' ';
+                    this_param.type += param_type_part.GetContainedText();
+                }
+            }
+
+            // Get name.
+            this_param.name = elem.GetChild("name").GetContainedText();
+
+            // Get category this parameter has one.
+            if (elem.HasAttribute("group"))
+                this_param.category = elem.GetAttribute("group");
+        });
+    });
+
+    return func_data;
+}
+
 
 int main()
 {
@@ -765,6 +886,10 @@ int main()
     std::cout << "Extracting enums\n";
     EnumData enum_data = ExtractEnums(root_element);
 
+    // Extract functions
+    std::cout << "Extracting functions\n";
+    FunctionData func_data = ExtractFunctions(root_element);
+
     // Dump data
     if (1)
     {
@@ -776,6 +901,10 @@ int main()
         std::ofstream enums_dump("out/enums_dump.txt");
         if (!enums_dump) Error("Unable to open `out/enums_dump.txt` for writing.");
         enum_data.PrettyPrint(enums_dump);
+
+        std::ofstream functions_dump("out/functions_dump.txt");
+        if (!functions_dump) Error("Unable to open `out/functions_dump.txt` for writing.");
+        func_data.PrettyPrint(functions_dump);
     }
 
     return 0;
