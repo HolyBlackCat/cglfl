@@ -1,3 +1,23 @@
+// Copyright (c) 2018-2019 Egor Mikhailov
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//    claim that you wrote the original software. If you use this software
+//    in a product, an acknowledgment in the product documentation would be
+//    appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//    misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
+
+#define VERSION "1.0.0 rc 1"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -30,28 +50,6 @@ namespace data
         {"unsigned int"  , "std::uint32_t"},
     };
 
-    const std::string header = 1+R"(
-// This file is a part of GLFL - OpenGL function (and extension) loader.
-
-// Copyright (c) 2018-2019 Egor Mikhailov
-//
-// This software is provided 'as-is', without any express or implied
-// warranty. In no event will the authors be held liable for any damages
-// arising from the use of this software.
-//
-// Permission is granted to anyone to use this software for any purpose,
-// including commercial applications, and to alter it and redistribute it
-// freely, subject to the following restrictions:
-//
-// 1. The origin of this software must not be misrepresented; you must not
-//    claim that you wrote the original software. If you use this software
-//    in a product, an acknowledgment in the product documentation would be
-//    appreciated but is not required.
-// 2. Altered source versions must be plainly marked as such, and must not be
-//    misrepresented as being the original software.
-// 3. This notice may not be removed or altered from any source distribution.
-
-)";
     const std::string pragma_once = "#pragma once\n\n";
 }
 
@@ -651,6 +649,7 @@ struct EnumData
     std::vector<EnumGroup> groups;
     std::map<std::string, std::set<std::string>> categories;
     int max_name_len;
+    std::map<std::string, std::pair<int, int>> name_to_indices;
 
     int enum_count;
 
@@ -782,13 +781,22 @@ EnumData ExtractEnums(const Element &root_element)
     for (const EnumGroup &group : enum_data.groups)
         enum_data.enum_count += group.elements.size();
 
+    for (std::size_t i = 0; i < enum_data.groups.size(); i++)
+    for (std::size_t j = 0; j < enum_data.groups[i].elements.size(); j++)
+    {
+        const EnumConstant &enum_const = enum_data.groups[i].elements[j];
+        if (!enum_data.name_to_indices.insert({enum_const.name, {i, j}}).second)
+            Error(Str("The spec has two enum constants named `", enum_const.name, "`."));
+    }
+
     return enum_data;
 }
 
 
 struct FunctionParam
 {
-    std::string type;
+    std::string type_l;
+    std::string type_r;
     std::string name;
     std::string category; // Can be empty.
 };
@@ -798,11 +806,55 @@ struct Function
     std::string name;
     std::string return_type;
     std::vector<FunctionParam> params;
+
+    bool NeedSpaceAfterReturnType() const
+    {
+        return return_type.size() > 0 && return_type.back() != '*';
+    }
+
+    std::string ParameterList(bool with_names) const
+    {
+        std::string ret;
+        ret += '(';
+
+        bool first = 1;
+
+        for (const FunctionParam &param : params)
+        {
+            if (first)
+                first = 0;
+            else
+                ret += ", ";
+
+            ret += param.type_l;
+            if (with_names)
+            {
+                if (ret.back() != '*')
+                    ret += ' ';
+                ret += param.name;
+            }
+            ret += param.type_r;
+        }
+
+        ret += ')';
+
+        return ret;
+    }
+
+    operator std::string() const
+    {
+        return name;
+    }
+
+    friend bool operator<(const std::string &a, const std::string &b)
+    {
+        return a < b;
+    }
 };
 
 struct FunctionData
 {
-    std::vector<Function> functions;
+    std::set<Function, std::less<>> functions;
 
     void PrettyPrint(std::ostream &stream) const
     {
@@ -814,7 +866,9 @@ struct FunctionData
 
             for (const auto &param : func.params)
             {
-                stream << "        " << param.name << " : " << param.type;
+                stream << "        " << param.name << " : " << param.type_l;
+                if (param.type_r.size())
+                    stream << "|" << param.type_r;
                 if (param.category.size() > 0)
                     stream << " (" << param.category << ')';
                 stream << '\n';
@@ -836,8 +890,7 @@ FunctionData ExtractFunctions(const Element &root_element)
     loc.ForEachChildNamed("command", [&](const Element &elem)
     {
         // Construct the function.
-        func_data.functions.push_back({});
-        auto &this_func = func_data.functions.back();
+        Function this_func;
 
         // Make sure the format is correct.
         const auto &proto = elem.GetChild("proto");
@@ -864,23 +917,33 @@ FunctionData ExtractFunctions(const Element &root_element)
             auto &this_param = this_func.params.back();
 
             // Get type.
+            bool seen_name = 0;
             for (const auto &param_type_part : elem.elements)
             {
+                if (param_type_part.IsTagNamed("name"))
+                    seen_name = 1;
+
                 if (!param_type_part.IsTagNamed("name") && !param_type_part.value.empty())
                 {
-                    if (this_param.type.size() > 0)
-                        this_param.type += ' ';
-                    this_param.type += param_type_part.GetContainedText();
+                    std::string &type = (seen_name ? this_param.type_r : this_param.type_l);
+
+                    if (type.size() > 0)
+                        type += ' ';
+                    type += param_type_part.GetContainedText();
                 }
             }
 
             // Get name.
             this_param.name = elem.GetChild("name").GetContainedText();
 
-            // Get category this parameter has one.
+            // Get category if this parameter has one.
             if (elem.HasAttribute("group"))
                 this_param.category = elem.GetAttribute("group");
         });
+
+        // Insert function into the set.
+        if (!func_data.functions.insert(std::move(this_func)).second)
+            Error(Str("The spec contains more than one function named `", this_func.name, "`."));
     });
 
     return func_data;
@@ -1000,7 +1063,11 @@ VersionData ExtractVersions(const Element &root_element)
         auto &this_variant = *variant_iter;
 
         // Construct a new version.
-        auto &this_version = this_variant.versions.insert({{version_major, version_minor}, {}}).first->second;
+        auto [this_version_iter, this_version_is_unique] = this_variant.versions.insert({{version_major, version_minor}, {}});
+        if (!this_version_is_unique)
+            Error(Str("Duplicate internal version name `", this_variant.name, ":", version_major, ".", version_minor, "`. (A spec defect or an internal error.)."));
+
+        auto &this_version = this_version_iter->second;
         this_version.sub_variant = sub_variant_name;
 
         // Inherit from another this_version if necessary.
@@ -1105,7 +1172,11 @@ ExtensionData ExtractExtensions(const Element &root_element)
         std::string name = elem.GetAttribute("name");
 
         // Construct the extension.
-        auto &this_extension = extension_data.extensions.insert({name, {}}).first->second;
+        auto [this_extension_it, was_inserted] = extension_data.extensions.insert({name, {}});
+        if (!was_inserted)
+            Error(Str("The spec contains a duplicate extension: `", name, "`."));
+
+        auto &this_extension = this_extension_it->second;
 
         // Get functions and enums.
         elem.ForEachChildNamed("require", [&](const Element &elem)
@@ -1195,7 +1266,10 @@ ComponentData GetComponents(const VersionData &version_data, const ExtensionData
     }
 
     for (std::size_t i = 0; i < component_data.components.size(); i++)
-        component_data.name_to_index.insert({component_data.components[i].name, i});
+    {
+        if (!component_data.name_to_index.insert({component_data.components[i].name, i}).second)
+            Error(Str("There is a duplicate component definition in the spec: `", component_data.components[i].name, "`."));
+    }
 
     return component_data;
 }
@@ -1203,92 +1277,99 @@ ComponentData GetComponents(const VersionData &version_data, const ExtensionData
 
 namespace Codegen
 {
-    std::ofstream output_file;
-
-    bool at_line_start = 1;
-    int indentation = 0;
-    int section_depth = 0;
-
-    const std::string indentation_string = "    ";
-
-    void OpenFile(std::string name)
+    namespace impl
     {
-        output_file = std::ofstream(name);
-        if (!output_file)
-            Error(Str("Unable to open `", name, "` for writing."));
-        at_line_start = 1;
-        indentation = 0;
-        section_depth = 0;
-        std::cout << "Generating " << name << '\n';
+        std::string output_file_name;
+        std::ofstream output_file;
+
+        std::stringstream ss;
+        const std::stringstream::fmtflags stdfmt = ss.flags();
+
+        bool at_line_start = 1;
+        int indentation = 0;
+        int section_depth = 0;
+
+        constexpr const char *indentation_string = "    ", *indentation_string_labels = "  ";
     }
 
-    int Indent()
+    void OpenFile(std::string file_name)
     {
-        return indentation * indentation_string.size();
+        impl::output_file_name = file_name;
+
+        impl::output_file.open(file_name);
+        if (!impl::output_file)
+            Error(Str("Unable to open `", file_name, "`."));
     }
-}
 
-void Output(const std::string &str)
-{
-    for (const char *ptr = str.c_str(); *ptr; ptr++)
+    void CheckFileErrors()
     {
-        char ch = *ptr;
+        if (!impl::output_file)
+            Error(Str("Unable to write to `", impl::output_file_name, "`."));
+    }
 
-        if (ch == '}' && Codegen::indentation > 0)
-            Codegen::indentation--;
-
-        if (Codegen::at_line_start)
+    void OutputStr(const std::string &str)
+    {
+        for (const char *ptr = str.c_str(); *ptr; ptr++)
         {
-            if (std::strchr(" \t\r", ch))
-                continue;
+            char ch = *ptr;
 
-            for (int i = (ch == '@'); i < Codegen::indentation; i++)
-                Codegen::output_file << Codegen::indentation_string;
-            Codegen::at_line_start = 0;
+            if (ch == '}' && impl::indentation > 0)
+                impl::indentation--;
+
+            if (impl::at_line_start)
+            {
+                if (std::strchr(" \t\r", ch))
+                    continue;
+
+                for (int i = 0; i < impl::indentation; i++)
+                    impl::output_file << (i == impl::indentation-1 && ch == '@' ? impl::indentation_string_labels : impl::indentation_string);
+                impl::at_line_start = 0;
+            }
+
+            if (ch != '@')
+                impl::output_file.put(ch == '$' ? ' ' : ch);
+
+            if (ch == '{')
+                impl::indentation++;
+
+            if (ch == '\n')
+                impl::at_line_start = 1;
         }
-
-        Codegen::output_file.put(ch == '$' || ch == '@' ? ' ' : ch);
-
-        if (ch == '{')
-            Codegen::indentation++;
-
-        if (ch == '\n')
-            Codegen::at_line_start = 1;
     }
-}
 
-template <typename ...P> void Output(const P &... params)
-{
-    Output(Str(params...));
-}
+    template <typename ...P> void Output(const P &... params)
+    {
+        OutputStr(Str(params...));
+    }
 
-void Section(std::string header, std::function<void()> func)
-{
-    Output(header, "\n{\n");
-    func();
-    Output("}\n");
-}
-void SectionSC(std::string header, std::function<void()> func) // 'sc' stands for 'end with semicolon'
-{
-    Output(header, "\n{\n");
-    func();
-    Output("};\n");
-}
+    void Section(std::string header, std::function<void()> func)
+    {
+        Output(header, "\n{\n");
+        func();
+        Output("}\n");
+    }
+    void SectionSemi(std::string header, std::function<void()> func) // 'sc' stands for 'end with semicolon'
+    {
+        Output(header, "\n{\n");
+        func();
+        Output("};\n");
+    }
 
-void DecorativeSection(std::string name, std::function<void()> func)
-{
-    Output("//{", std::string(Codegen::section_depth+1, ' '), name, "\n");
-    Codegen::indentation--;
-    Codegen::section_depth++;
-    func();
-    Codegen::section_depth--;
-    Output("//}", std::string(Codegen::section_depth+1, ' '), name, "\n");
-    Codegen::indentation++;
-}
+    void SectionDecorative(std::string name, std::function<void()> func)
+    {
+        Output("//{", std::string(impl::section_depth+1, ' '), name, "\n");
+        impl::indentation--;
+        impl::section_depth++;
+        func();
+        impl::section_depth--;
+        Output("//}", std::string(impl::section_depth+1, ' '), name, "\n");
+        impl::indentation++;
+    }
 
-void NextLine()
-{
-    Output("\n");
+    void next_line()
+    {
+        Output("\n");
+    }
 }
 
 
@@ -1306,9 +1387,7 @@ int main()
     std::system("rm -rf out >/dev/null");
     #endif
 
-    std::system("mkdir out && "
-                "mkdir out" D "include &&"
-                "mkdir out" D "src");
+    std::system("mkdir out");
 
     std::cout << "Loading `gl.xml`\n";
     std::string source = LoadFile("gl.xml");
@@ -1332,19 +1411,19 @@ int main()
     std::cout << "Extracting types\n";
     std::string types = ExtractTypes(root_element);
 
-    std::cout << "Extracting enums     ";
+    std::cout << "Extracting enum constants";
     EnumData enum_data = ExtractEnums(root_element);
     std::cout << " - " << enum_data.enum_count << " found\n";
 
-    std::cout << "Extracting functions ";
+    std::cout << "Extracting functions     ";
     FunctionData func_data = ExtractFunctions(root_element);
     std::cout << " - " << func_data.functions.size() << " found\n";
 
-    std::cout << "Extracting versions  ";
+    std::cout << "Extracting versions      ";
     VersionData version_data = ExtractVersions(root_element);
     std::cout << " - " << version_data.version_count << " found\n";
 
-    std::cout << "Extracting extensions";
+    std::cout << "Extracting extensions    ";
     ExtensionData extension_data = ExtractExtensions(root_element);
     std::cout << " - " << extension_data.extensions.size() << " found\n";
 
@@ -1386,7 +1465,8 @@ int main()
     }
     #endif
 
-    std::set<std::string> needed_funcitons, needed_enums;
+    std::set<std::string> needed_function_names, needed_enum_names;
+    std::map<std::string, Extension *> needed_extensions;
 
     { // Get input
         std::cout << "\n"
@@ -1394,33 +1474,45 @@ int main()
                      "  Consult `out/components.txt` for the list of known components.\n"
                      "  Enter desired components as a space-separated list.\n";
 
-        while (![&]{
-            std::cout << '\n';
+        std::vector<std::string> desired_components;
 
+        // Get a list of desired componenets.
+        while (![&]{
+            // Input the list
             std::string input_line;
             if (!std::getline(std::cin, input_line))
                 Error("Invalid input.");
 
             std::istringstream input_line_ss(input_line);
+            std::set<std::string> input_set(std::istream_iterator<std::string>(input_line_ss), {});
 
-            std::vector<std::string> desired_components(std::istream_iterator<std::string>(input_line_ss), std::istream_iterator<std::string>{});
-
-            { // Check for duplicates
-                std::set<std::string> component_set;
-                for (const std::string &name : desired_components)
+            // Get components by their names.
+            // Note that we do it in this weird way to keep the components sorted in a particular way.
+            desired_components = {};
+            for (const auto &component : component_data.components)
+            {
+                if (auto it = input_set.find(component.name); it != input_set.end())
                 {
-                    if (!component_set.insert(name).second)
-                    {
-                        std::cout << "Duplicate component `" << name << "`.\n";
-                        return 0;
-                    }
+                    desired_components.push_back(component.name);
+                    input_set.erase(it);
                 }
             }
 
-            { // Check component names and make sure there is at least one version specified
-                needed_funcitons.clear();
-                needed_enums.clear();
+            // Stop if some names are invalid.
+            if (input_set.size() > 0)
+            {
+                std::cout << "Unknown component" << (input_set.size() != 1 ? "s" : "") << ":";
+                for (const auto &name : input_set)
+                    std::cout << ' ' << name;
+                std::cout << '\n';
+                return 0;
+            }
 
+            // Stop if the input is empty.
+            if (desired_components.empty())
+                return 0;
+
+            { // Make sure there is at least one version specified.
                 bool got_version = 0;
 
                 for (const std::string &name : desired_components)
@@ -1428,18 +1520,21 @@ int main()
                     if (auto it = component_data.name_to_index.find(name); it != component_data.name_to_index.end())
                     {
                         if (!component_data.components[it->second].is_extension)
+                        {
                             got_version = 1;
+                            break;
+                        }
                     }
                     else
                     {
-                        std::cout << "Unknown component `" << name << "`.\n";
+                        Error(Str("Internal error: Invalid component name `", name, "`.")); // This shouldn't happen, as at this point we've already checked for invalid component names.
                         return 0;
                     }
                 }
 
                 if (!got_version)
                 {
-                    std::cout << "Expected at least one version.\n";
+                    std::cout << "Expected at least one version in additions to .\n";
                     return 0;
                 }
             }
@@ -1447,7 +1542,95 @@ int main()
             return 1;
         }()) {}
 
+        // Generate function and enum lists
+        for (const std::string &component_name : desired_components)
+        {
+            auto component_it = component_data.name_to_index.find(component_name);
+            if (component_it == component_data.name_to_index.end())
+                Error(Str("Internal error: Invalid component name `", component_name, "`.")); // This shouldn't happen, as at this point we've already checked for invalid component names.
 
+            const Component &component = component_data.components[component_it->second];
+
+            if (!component.is_extension)
+            {
+                needed_function_names.insert(component.functions.begin(), component.functions.end());
+                needed_enum_names.insert(component.enums.begin(), component.enums.end());
+            }
+            else
+            {
+                auto extension_it = extension_data.extensions.find(component_name);
+                if (extension_it == extension_data.extensions.end())
+                    Error(Str("Internal error: Invalid extension name `", component_name, "`.")); // This shouldn't happen, as at this point we've already checked for invalid component names, and for extensions their names match corresponding component names.
+
+                needed_extensions.insert({component_name, &extension_it->second});
+            }
+        }
+    }
+
+
+    struct Section
+    {
+        std::map<std::string, const Function *> functions;
+        std::map<std::string, const EnumConstant *> enums;
+    };
+
+    Section primary;
+    std::map<std::string, Section> ext;
+
+    int ext_functions_added = 0, ext_enums_added = 0;
+
+    { // Prepare function and enum lists
+        for (const std::string &func_name : needed_function_names)
+        {
+            auto it = func_data.functions.find(func_name);
+            if (it == func_data.functions.end())
+                Error(Str("No function named `", func_name, "` found. The spec seems to be inconsistent."));
+
+            primary.functions.insert({func_name, &*it});
+        }
+
+        for (const std::string &enum_name : needed_enum_names)
+        {
+            auto it = enum_data.name_to_indices.find(enum_name);
+            if (it == enum_data.name_to_indices.end())
+                Error(Str("No enum constant named `", enum_name, "` found. The spec seems to be inconsistent."));
+
+            primary.enums.insert({enum_name, &enum_data.groups[it->second.first].elements[it->second.second]});
+        }
+
+        for (const auto &[ext_name, ext_pointer] : needed_extensions)
+        {
+            for (const std::string &func_name : ext_pointer->functions)
+            {
+                if (auto it = primary.functions.find(func_name); it != primary.functions.end())
+                    continue;
+                ext_functions_added++;
+
+                auto it = func_data.functions.find(func_name);
+                if (it == func_data.functions.end())
+                    Error(Str("No function named `", func_name, "` found. The spec seems to be inconsistent."));
+
+                primary.functions.insert({func_name, &*it});
+            }
+
+            for (const std::string &enum_name : ext_pointer->enums)
+            {
+                if (auto it = primary.enums.find(enum_name); it != primary.enums.end())
+                    continue;
+                ext_enums_added++;
+
+                auto it = enum_data.name_to_indices.find(enum_name);
+                if (it == enum_data.name_to_indices.end())
+                    Error(Str("No enum constant named `", enum_name, "` found. The spec seems to be inconsistent."));
+
+                primary.enums.insert({enum_name, &enum_data.groups[it->second.first].elements[it->second.second]});
+            }
+        }
+
+        std::cout << "\n"
+                     "Selected:\n"
+                     "  " << primary.functions.size() + ext_functions_added << " functions\n"
+                     "  " << primary.enums.size() + ext_enums_added << " enum constants\n";
     }
 
     { // Generate code

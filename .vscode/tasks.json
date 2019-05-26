@@ -1,0 +1,79 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "shell",
+            "windows": {"command": "mingw32-make -j4"},
+            "linux": {"command": "make -j4"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+            "group": {"kind": "build", "isDefault": true},
+        },
+        {
+            "label": "Build & Run",
+            "type": "shell",
+            "windows": {"command": "mingw32-make -j4 && glfl_generator.exe"},
+            "linux": {"command": "make -j4 && ./glfl_generator"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "Run",
+            "type": "shell",
+            "windows": {"command": "glfl_generator.exe"},
+            "linux": {"command": "./glfl_generator"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "↪ Debug",
+            "type": "shell",
+            "windows": {"command": "mingw32-make use mode=debug"},
+            "linux": {"command": "make use mode=debug"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "↪ Debug (hard)",
+            "type": "shell",
+            "windows": {"command": "mingw32-make use mode=debug_hard"},
+            "linux": {"command": "make use mode=debug_hard"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "↪ Release",
+            "type": "shell",
+            "windows": {"command": "mingw32-make use mode=release"},
+            "linux": {"command": "make use mode=release"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "◙ Update commands",
+            "type": "shell",
+            "windows": {"command": "mingw32-make commands_fixed"},
+            "linux": {"command": "make commands_fixed"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "⦻ Rebuild",
+            "type": "shell",
+            "windows": {"command": "mingw32-make clean_mode && mingw32-make -j4"},
+            "linux": {"command": "make clean_mode && make -j4"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "⧮ Clean",
+            "type": "shell",
+            "command": "mingw32-make clean_mode",
+            "windows": {"command": "mingw32-make clean_mode"},
+            "linux": {"command": "make clean_mode"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+        {
+            "label": "⧯ Clean All",
+            "type": "shell",
+            "windows": {"command": "mingw32-make clean"},
+            "linux": {"command": "make clean"},
+            "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
+        },
+    ]
+}

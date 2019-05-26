@@ -1,4 +1,4 @@
 *.exe
-*.o
-*.depend
-*.layout
+obj/**
+*.current_mode.mk
+compile_commands.json
