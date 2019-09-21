@@ -1,4 +1,3 @@
 *.exe
 obj/**
-*.current_mode.mk
 compile_commands.json

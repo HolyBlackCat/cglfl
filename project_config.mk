@@ -10,7 +10,7 @@ OUTPUT_FILE := glfl_generator
 LINKER_MODE := CXX
 
 # Flags
-CXXFLAGS := -Wall -Wextra -pedantic-errors -std=c++2a# -frelaxed-template-template-args
+CXXFLAGS := -Wall -Wextra -pedantic-errors -std=c++2a
 LDFLAGS :=
 
 # Build modes
@@ -22,4 +22,3 @@ $(mode_flags) CXXFLAGS += -g -D_GLIBCXX_DEBUG
 
 $(call new_mode,release)
 $(mode_flags) CXXFLAGS += -DNDEBUG -O3
-$(mode_flags) LDFLAGS += -O3 -s -mwindows

@@ -5,30 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
-            "type": "cppdbg",
+            "name": "Debug (win)",
+            "type": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/glfl_generator",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/bin",
-            "environment": [],
-            "externalConsole": true,
-            "MIMode": "gdb",
-            "windows": {"miDebuggerPath": "gdb.exe",},
-            "linux": {"miDebuggerPath": "gdb",},
-            "setupCommands": [
-                {
-                    "description": "Catch exceptions",
-                    "text": "-exec catch throw",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-            ]
-        }
+            "target": "./glfl_generator.exe",
+            "cwd": "${workspaceRoot}",
+            "valuesFormatting": "parseText",
+            "terminal": "",
+        },
     ]
 }
