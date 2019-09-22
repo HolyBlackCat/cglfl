@@ -1,3 +1,6 @@
-*.exe
+cglfl
+cglfl.exe
+out/*.txt
+out/**/macros_*
 obj/**
 compile_commands.json

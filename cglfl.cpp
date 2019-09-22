@@ -66,6 +66,15 @@ template <typename ...P> std::string Str(const P &... params)
     std::exit(1);
 }
 
+std::string ReadString()
+{
+    std::string ret;
+    bool ok = bool(std::getline(std::cin, ret));
+    if (!ok)
+        Error("Unable to read from the standard input.");
+    return ret;
+}
+
 std::string GetContext(const char *ptr)
 {
     std::string ret;
@@ -653,6 +662,15 @@ struct EnumData
 
     int enum_count;
 
+    const EnumConstant &Find(const std::string &name)
+    {
+        auto it = name_to_indices.find(name);
+        if (it == name_to_indices.end())
+            Error(Str("Internal: Enum constant `", name, "` not found."));
+        auto [group_index, elem_index] = it->second;
+        return groups[group_index].elements[elem_index];
+    }
+
     void PrettyPrint(std::ostream &stream) const
     {
         std::string ret;
@@ -812,31 +830,37 @@ struct Function
         return return_type.size() > 0 && return_type.back() != '*';
     }
 
-    std::string ParameterList(bool with_names) const
+    enum class ParamMode {full, types_only, names_only};
+
+    std::string ParameterList(ParamMode mode, bool spaces_after_commas = 0) const
     {
         std::string ret;
-        ret += '(';
 
         bool first = 1;
-
         for (const FunctionParam &param : params)
         {
             if (first)
-                first = 0;
-            else
-                ret += ", ";
-
-            ret += param.type_l;
-            if (with_names)
             {
-                if (ret.back() != '*')
+                first = 0;
+            }
+            else
+            {
+                ret += ',';
+                if (spaces_after_commas)
+                    ret += ' ';
+            }
+
+            if (mode != ParamMode::names_only)
+                ret += param.type_l;
+            if (mode != ParamMode::types_only)
+            {
+                if (mode != ParamMode::names_only && ret.size() > 0 && ret.back() != '*')
                     ret += ' ';
                 ret += param.name;
             }
-            ret += param.type_r;
+            if (mode != ParamMode::names_only)
+                ret += param.type_r;
         }
-
-        ret += ')';
 
         return ret;
     }
@@ -855,6 +879,14 @@ struct Function
 struct FunctionData
 {
     std::set<Function, std::less<>> functions;
+
+    const Function &Find(const std::string &name)
+    {
+        auto it = functions.find(name);
+        if (it == functions.end())
+            Error(Str("Internal: Function `", name, "` not found."));
+        return *it;
+    }
 
     void PrettyPrint(std::ostream &stream) const
     {
@@ -1137,6 +1169,14 @@ struct ExtensionData
 {
     std::map<std::string, Extension> extensions;
 
+    const Extension &Find(const std::string &name)
+    {
+        auto it = extensions.find(name);
+        if (it == extensions.end())
+            Error(Str("Internal: Extension `", name, "` not found."));
+        return it->second;
+    }
+
     void PrettyPrint(std::ostream &stream) const
     {
         stream << "extensions {\n";
@@ -1200,81 +1240,6 @@ ExtensionData ExtractExtensions(const Element &root_element)
     return extension_data;
 }
 
-
-struct Component
-{
-    std::string name;
-
-    bool is_extension = 0;
-
-    std::set<std::string> functions, enums;
-};
-
-struct ComponentData
-{
-    std::vector<Component> components; // The list is sorted so that extensions come after regular versions.
-    std::map<std::string, int> name_to_index;
-
-    void PrettyPrint(std::ostream &stream) const
-    {
-        for (const Component &component : components)
-            stream << component.name << '\n';
-    }
-};
-
-ComponentData GetComponents(const VersionData &version_data, const ExtensionData &extension_data)
-{
-    ComponentData component_data;
-
-    for (const Variant &variant : version_data.variants)
-    for (const auto &version_pair : variant.versions)
-    {
-        int major = version_pair.first.first;
-        int minor = version_pair.first.second;
-        const Version &version = version_pair.second;
-
-        bool has_separate_profiles = version.functions_deprecated.size() > 0 || version.enums_deprecated.size() > 0;
-
-        std::string name = Str(variant.name, "_", major, ".", minor);
-
-        Component new_component;
-        new_component.name = name + (has_separate_profiles ? "_core" : "");
-        new_component.functions = version.functions;
-        new_component.enums = version.enums;
-        component_data.components.push_back(new_component);
-
-        if (has_separate_profiles)
-        {
-            new_component.name = name + "_compat";
-            new_component.functions.insert(version.functions_deprecated.begin(), version.functions_deprecated.end());
-            new_component.enums.insert(version.enums_deprecated.begin(), version.enums_deprecated.end());
-            component_data.components.push_back(new_component);
-        }
-    }
-
-    for (const auto &extension_pair : extension_data.extensions)
-    {
-        std::string name = extension_pair.first;
-        const Extension &extension = extension_pair.second;
-
-        Component new_component;
-        new_component.name = name;
-        new_component.functions = extension.functions;
-        new_component.enums = extension.enums;
-        new_component.is_extension = 1;
-        component_data.components.push_back(new_component);
-    }
-
-    for (std::size_t i = 0; i < component_data.components.size(); i++)
-    {
-        if (!component_data.name_to_index.insert({component_data.components[i].name, i}).second)
-            Error(Str("There is a duplicate component definition in the spec: `", component_data.components[i].name, "`."));
-    }
-
-    return component_data;
-}
-
-
 namespace Codegen
 {
     namespace impl
@@ -1298,13 +1263,20 @@ namespace Codegen
 
         impl::output_file.open(file_name);
         if (!impl::output_file)
-            Error(Str("Unable to open `", file_name, "`."));
+            Error(Str("Unable to open `", file_name, "` for writing."));
+
+        std::cout << "Generating `" << file_name << "`\n";
     }
 
-    void CheckFileErrors()
+    void CloseFile()
     {
+        if (!impl::output_file.is_open())
+            return;
+
         if (!impl::output_file)
             Error(Str("Unable to write to `", impl::output_file_name, "`."));
+
+        impl::output_file.close();
     }
 
     void OutputStr(const std::string &str)
@@ -1366,7 +1338,7 @@ namespace Codegen
         impl::indentation++;
     }
 
-    void next_line()
+    void NextLine()
     {
         Output("\n");
     }
@@ -1375,20 +1347,6 @@ namespace Codegen
 
 int main()
 {
-    #ifdef _WIN32
-    #  define D "\\"
-    #else
-    #  define D "/"
-    #endif
-
-    #ifdef _WIN32
-    std::system("rmdir /S /Q out >NUL");
-    #else
-    std::system("rm -rf out >/dev/null");
-    #endif
-
-    std::system("mkdir out");
-
     std::cout << "Loading `gl.xml`\n";
     std::string source = LoadFile("gl.xml");
 
@@ -1427,15 +1385,7 @@ int main()
     ExtensionData extension_data = ExtractExtensions(root_element);
     std::cout << " - " << extension_data.extensions.size() << " found\n";
 
-    ComponentData component_data = GetComponents(version_data, extension_data);
-
     std::cout << "Dumping data\n";
-    { // Dump components
-        std::ofstream components("out/components.txt");
-        if (!components) Error("Unable to open `out/components.txt` for writing.");
-        component_data.PrettyPrint(components);
-        components.close();
-    }
     #if 1
     { // Dump more data
         std::ofstream types_dump("out/types_dump.txt");
@@ -1465,177 +1415,298 @@ int main()
     }
     #endif
 
-    std::set<std::string> needed_function_names, needed_enum_names;
-    std::map<std::string, Extension *> needed_extensions;
+    const Version *selected_version = 0;
+    const Variant *selected_version_variant = 0;
+    std::pair<int, int> selected_version_number;
 
-    { // Get input
-        std::cout << "\n"
-                     "What components (versions and extensions) do you want?\n"
-                     "  Consult `out/components.txt` for the list of known components.\n"
-                     "  Enter desired components as a space-separated list.\n";
+    bool core_profile = 0, compat_profile = 0; // At most one of those will be set.
 
-        std::vector<std::string> desired_components;
+    std::vector<const Function *> primary_functions, all_functions;
+    std::vector<const EnumConstant *> all_enums;
 
-        // Get a list of desired componenets.
-        while (![&]{
-            // Input the list
-            std::string input_line;
-            if (!std::getline(std::cin, input_line))
-                Error("Invalid input.");
+    std::map<std::string, std::vector<const Function *>> extensions; // Note that a single function can belong to several extensions, and maybe also to some versions.
 
-            std::istringstream input_line_ss(input_line);
-            std::set<std::string> input_set(std::istream_iterator<std::string>(input_line_ss), {});
 
-            // Get components by their names.
-            // Note that we do it in this weird way to keep the components sorted in a particular way.
-            desired_components = {};
-            for (const auto &component : component_data.components)
+    { // Get user input
+        { // Ask for api version
+            auto VersionName = [](const Variant &variant, const std::pair<int, int> &version_number) -> std::string
             {
-                if (auto it = input_set.find(component.name); it != input_set.end())
-                {
-                    desired_components.push_back(component.name);
-                    input_set.erase(it);
-                }
-            }
+                return Str(variant.name, version_number.first, ".", version_number.second);
+            };
 
-            // Stop if some names are invalid.
-            if (input_set.size() > 0)
+            std::cout << "\nFound following versions:\n ";
+            for (const Variant &variant : version_data.variants)
+            for (const auto &[number, version] : variant.versions)
+                std::cout << ' ' << VersionName(variant, number);
+            std::cout << "\n";
+
+            while (1)
             {
-                std::cout << "Unknown component" << (input_set.size() != 1 ? "s" : "") << ":";
-                for (const auto &name : input_set)
-                    std::cout << ' ' << name;
-                std::cout << '\n';
-                return 0;
-            }
+                std::cout << "Select a version: ";
+                std::string version_name = ReadString();
 
-            // Stop if the input is empty.
-            if (desired_components.empty())
-                return 0;
-
-            { // Make sure there is at least one version specified.
-                bool got_version = 0;
-
-                for (const std::string &name : desired_components)
+                bool found = 0;
+                for (const Variant &variant : version_data.variants)
                 {
-                    if (auto it = component_data.name_to_index.find(name); it != component_data.name_to_index.end())
+                    for (const auto &[number, version] : variant.versions)
                     {
-                        if (!component_data.components[it->second].is_extension)
+                        if (version_name == VersionName(variant, number))
                         {
-                            got_version = 1;
+                            found = 1;
+                            selected_version = &version;
+                            selected_version_variant = &variant;
+                            selected_version_number = number;
                             break;
                         }
                     }
+
+                    if (found)
+                        break;
+                }
+
+                if (!found)
+                {
+                    std::cout << "No such version.\n";
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        { // Ask for api profile (core or compat) if necessary
+            if (selected_version->enums_deprecated.size() > 0 || selected_version->functions_deprecated.size() > 0)
+            {
+                std::cout << "Available profiles:\n  core compat\n";
+                while (1)
+                {
+                    std::cout << "Select a profile: ";
+                    std::string profile = ReadString();
+                    bool is_core = profile == "core";
+                    bool is_compat = profile == "compat";
+                    if (!is_core && !is_compat)
+                    {
+                        std::cout << "No such profile.\n";
+                        continue;
+                    }
+
+                    core_profile = is_core;
+                    compat_profile = is_compat;
+                    break;
+                }
+            }
+        }
+
+        std::set<std::string> selected_enums;
+
+        { // Make function and enum lists
+            // Function list
+            for (const std::string &func : selected_version->functions)
+                primary_functions.push_back(&func_data.Find(func));
+
+            if (compat_profile)
+            {
+                for (const std::string &func : selected_version->functions_deprecated)
+                    primary_functions.push_back(&func_data.Find(func));
+            }
+
+            std::sort(primary_functions.begin(), primary_functions.end(), [](const Function *a, const Function *b)
+            {
+                // Sorting shouldn't be necessary if `compat_profile == false`, but I'll do it unconditionally for a good measure.
+                return a->name < b->name;
+            });
+
+            // Enum list
+            selected_enums.insert(selected_version->enums.begin(), selected_version->enums.end());
+            if (compat_profile)
+                selected_enums.insert(selected_version->enums_deprecated.begin(), selected_version->enums_deprecated.end());
+        }
+
+        std::set<std::string> selected_extensions;
+
+        { // Ask for extension lists
+            std::cout << "Found following extensions:\n ";
+            for (const auto &[name, ext] : extension_data.extensions)
+                std::cout << ' ' << name;
+            std::cout << "\n";
+
+            while (1)
+            {
+                if (selected_extensions.size() > 0)
+                    std::cout << "Any more extensions? ";
+                else
+                    std::cout << "What extensions do you want, if any? ";
+
+                std::string input_str = ReadString();
+                if (input_str.empty())
+                    break;
+
+                std::istringstream ss(input_str);
+                std::string ext_name;
+                while (ss >> ext_name)
+                {
+                    bool found = extension_data.extensions.count(ext_name);
+                    if (found)
+                    {
+                        bool inserted = selected_extensions.insert(ext_name).second;
+                        if (inserted)
+                            std::cout << "Added `" << ext_name << "`.\n";
+                        else
+                            std::cout << "Skipping `" << ext_name << "` (already added).\n";
+                    }
                     else
                     {
-                        Error(Str("Internal error: Invalid component name `", name, "`.")); // This shouldn't happen, as at this point we've already checked for invalid component names.
-                        return 0;
+                        std::cout << "Skipping `" << ext_name << "` (not found).\n";
                     }
                 }
+            }
+        }
 
-                if (!got_version)
+        { // Make function and enum lists for extensions
+            for (const std::string &ext : selected_extensions)
+            {
+                const auto &ext_info = extension_data.Find(ext);
+                auto &funcs = extensions[ext];
+
+                // Function list
+                for (const std::string &func : ext_info.functions)
+                    funcs.push_back(&func_data.Find(func));
+
+                std::sort(funcs.begin(), funcs.end(), [](const Function *a, const Function *b)
                 {
-                    std::cout << "Expected at least one version in additions to .\n";
-                    return 0;
-                }
-            }
+                    // Sorting shouldn't be necessary, but I'll leave it for a good measure.
+                    return a->name < b->name;
+                });
 
-            return 1;
-        }()) {}
-
-        // Generate function and enum lists
-        for (const std::string &component_name : desired_components)
-        {
-            auto component_it = component_data.name_to_index.find(component_name);
-            if (component_it == component_data.name_to_index.end())
-                Error(Str("Internal error: Invalid component name `", component_name, "`.")); // This shouldn't happen, as at this point we've already checked for invalid component names.
-
-            const Component &component = component_data.components[component_it->second];
-
-            if (!component.is_extension)
-            {
-                needed_function_names.insert(component.functions.begin(), component.functions.end());
-                needed_enum_names.insert(component.enums.begin(), component.enums.end());
-            }
-            else
-            {
-                auto extension_it = extension_data.extensions.find(component_name);
-                if (extension_it == extension_data.extensions.end())
-                    Error(Str("Internal error: Invalid extension name `", component_name, "`.")); // This shouldn't happen, as at this point we've already checked for invalid component names, and for extensions their names match corresponding component names.
-
-                needed_extensions.insert({component_name, &extension_it->second});
-            }
-        }
-    }
-
-
-    struct Section
-    {
-        std::map<std::string, const Function *> functions;
-        std::map<std::string, const EnumConstant *> enums;
-    };
-
-    Section primary;
-    std::map<std::string, Section> ext;
-
-    int ext_functions_added = 0, ext_enums_added = 0;
-
-    { // Prepare function and enum lists
-        for (const std::string &func_name : needed_function_names)
-        {
-            auto it = func_data.functions.find(func_name);
-            if (it == func_data.functions.end())
-                Error(Str("No function named `", func_name, "` found. The spec seems to be inconsistent."));
-
-            primary.functions.insert({func_name, &*it});
-        }
-
-        for (const std::string &enum_name : needed_enum_names)
-        {
-            auto it = enum_data.name_to_indices.find(enum_name);
-            if (it == enum_data.name_to_indices.end())
-                Error(Str("No enum constant named `", enum_name, "` found. The spec seems to be inconsistent."));
-
-            primary.enums.insert({enum_name, &enum_data.groups[it->second.first].elements[it->second.second]});
-        }
-
-        for (const auto &[ext_name, ext_pointer] : needed_extensions)
-        {
-            for (const std::string &func_name : ext_pointer->functions)
-            {
-                if (auto it = primary.functions.find(func_name); it != primary.functions.end())
-                    continue;
-                ext_functions_added++;
-
-                auto it = func_data.functions.find(func_name);
-                if (it == func_data.functions.end())
-                    Error(Str("No function named `", func_name, "` found. The spec seems to be inconsistent."));
-
-                primary.functions.insert({func_name, &*it});
-            }
-
-            for (const std::string &enum_name : ext_pointer->enums)
-            {
-                if (auto it = primary.enums.find(enum_name); it != primary.enums.end())
-                    continue;
-                ext_enums_added++;
-
-                auto it = enum_data.name_to_indices.find(enum_name);
-                if (it == enum_data.name_to_indices.end())
-                    Error(Str("No enum constant named `", enum_name, "` found. The spec seems to be inconsistent."));
-
-                primary.enums.insert({enum_name, &enum_data.groups[it->second.first].elements[it->second.second]});
+                // Enum list
+                selected_enums.insert(ext_info.enums.begin(), ext_info.enums.end());
             }
         }
 
-        std::cout << "\n"
-                     "Selected:\n"
-                     "  " << primary.functions.size() + ext_functions_added << " functions\n"
-                     "  " << primary.enums.size() + ext_enums_added << " enum constants\n";
+        { // Finalize function and enum lists
+            // Make combined function list
+            all_functions = primary_functions;
+            for (const auto &[ext_name, ext] : extensions)
+                all_functions.insert(all_functions.end(), ext.begin(), ext.end());
+            std::sort(all_functions.begin(), all_functions.end(), [](const Function *a, const Function *b)
+            {
+                return a->name < b->name;
+            });
+            all_functions.erase(std::unique(all_functions.begin(), all_functions.end(), [](const Function *a, const Function *b)
+            {
+                return a->name == b->name;
+            }), all_functions.end());
+
+            // Make enum list
+            for (const std::string &en : selected_enums)
+                all_enums.push_back(&enum_data.Find(en));
+        }
     }
 
     { // Generate code
+        std::string disclaimer_generated =
+            "// This file is a part of CGLFL (configurable OpenGL function loader).\n"
+            "// Generated, do no edit!\n"
+            "//\n"
+            "// Version: " VERSION "\n"
+            "// API: " + Str(selected_version_variant->name, " ", selected_version_number.first, ".", selected_version_number.second,
+                core_profile ? " (core profile)" : compat_profile ? " (compatibility profile)" : "") + "\n"
+            "// Extensions:";
+        for (const auto &[ext_name, ext] : extensions)
+            disclaimer_generated += " " + ext_name;
+        disclaimer_generated += "\n";
 
+        using namespace Codegen;
+
+        { // `macros_internal.hpp`
+            OpenFile("out/include/cglfl/macros_internal.hpp");
+
+            Output("#pragma once\n\n");
+            Output(disclaimer_generated);
+
+            NextLine();
+
+            Output("#define CGLFL_FUNCS");
+            for (const std::string &func : selected_version->functions)
+                Output(" \\\n$   ", func);
+            if (compat_profile)
+            {
+                for (const std::string &func : selected_version->functions_deprecated)
+                    Output(" \\\n$   ", func);
+            }
+            Output("\n");
+
+            NextLine();
+
+            Output("#define CGLFL_EXTS(X)");
+            for (const auto &[ext_name, ext] : extensions)
+                Output(" \\\n$   X(", ext_name, ")");
+            Output("\n");
+
+            NextLine();
+
+            for (const auto &[ext_name, ext] : extensions)
+            {
+                Output("#define CGLFL_EXT_FUNCS_", ext_name);
+                for (const auto *func : ext)
+                    Output(" \\\n$   ", func->name);
+                Output("\n");
+            }
+
+            CloseFile();
+        }
+
+        { // `macros_public.hpp`
+            OpenFile("out/include/cglfl/macros_public.hpp");
+
+            Output("#pragma once\n\n");
+            Output(disclaimer_generated);
+
+            NextLine();
+
+            Output("#define CGLFL_GL_MAJOR ", selected_version_number.first, "\n");
+            Output("#define CGLFL_GL_MINOR ", selected_version_number.second, "\n");
+            Output("#define CGLFL_GL_API_", selected_version_variant->name, "\n");
+            Output("#define CGLFL_GL_PROFILE_", core_profile ? "core" : compat_profile ? "_compat" : "_none", "\n");
+
+            NextLine();
+
+            int max_func_name_len = 0;
+            for (const auto *func : all_functions)
+                if (int len = func->name.size(); len > max_func_name_len)
+                    max_func_name_len = len;
+
+            int index = 0;
+            for (const auto *func_ptr : all_functions)
+            {
+                const auto &func = *func_ptr;
+                Output("#define ", func.name, std::string(max_func_name_len - func.name.size(), ' '), " CGLFL_CALL(",
+                    index++, ",",
+                    func.name, ",",
+                    func.return_type, ",",
+                    func.params.size(), ","
+                    "(", func.ParameterList(Function::ParamMode::names_only), "),"
+                    "(", func.ParameterList(Function::ParamMode::full), "))\n");
+            }
+
+            NextLine();
+
+            int max_enum_name_len = 0;
+            for (const auto *en : all_enums)
+                if (int len = en->name.size(); len > max_enum_name_len)
+                    max_enum_name_len = len;
+
+            for (const auto *enum_ptr : all_enums)
+            {
+                const auto &en = *enum_ptr;
+                Output("#define ", en.name, std::string(max_enum_name_len - en.name.size(), ' '), " ", en.value, "\n");
+            }
+
+            CloseFile();
+        }
     }
+
+    std::cout << "Done!\n";
 
     return 0;
 }
