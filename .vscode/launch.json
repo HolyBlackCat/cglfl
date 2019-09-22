@@ -8,7 +8,7 @@
             "name": "Debug (win)",
             "type": "gdb",
             "request": "launch",
-            "target": "./glfl_generator.exe",
+            "target": "./cglfl.exe",
             "cwd": "${workspaceRoot}",
             "valuesFormatting": "parseText",
             "terminal": "",

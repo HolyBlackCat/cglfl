@@ -1,12 +1,12 @@
 # Sources
 SOURCE_DIRS :=
-SOURCES := glfl_generator.cpp
+SOURCES := cglfl.cpp
 
 # Object directory
 OBJECT_DIR := obj
 
 # Resulting binary
-OUTPUT_FILE := glfl_generator
+OUTPUT_FILE := cglfl
 LINKER_MODE := CXX
 
 # Flags
