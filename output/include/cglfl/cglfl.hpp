@@ -96,8 +96,11 @@ namespace cglfl
                 {
                     if (log_string_params)
                     {
-                        std::string ret;
                         const char *ptr = object;
+                        if (!ptr)
+                            return "null";
+                        std::string ret;
+                        ret += '`';
                         while (*ptr)
                         {
                             if ((unsigned char)*ptr < ' ' || *ptr == 0x7f)
@@ -111,6 +114,7 @@ namespace cglfl
                             }
                             ptr++;
                         }
+                        ret += '`';
                         return ret;
                     }
                 }
