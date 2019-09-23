@@ -1,4 +1,4 @@
-#define VERSION "1.0.0 rc 1"
+#define VERSION "1.0.0"
 
 #include <algorithm>
 #include <cstddef>
@@ -1345,8 +1345,8 @@ int main()
     #if 1
     { // Dump XML tree
         std::cout << "Dumping XML tree\n";
-        std::ofstream xml_tree_dump("out/xml_tree_dump.txt");
-        if (!xml_tree_dump) Error("Unable to open `out/xml_tree_dump.txt` for writing.");
+        std::ofstream xml_tree_dump("output/xml_tree_dump.txt");
+        if (!xml_tree_dump) Error("Unable to open `output/xml_tree_dump.txt` for writing.");
         root_element.PrettyPrint(xml_tree_dump);
         xml_tree_dump.close();
     }
@@ -1374,28 +1374,28 @@ int main()
     std::cout << "Dumping data\n";
     #if 1
     { // Dump more data
-        std::ofstream types_dump("out/types_dump.txt");
-        if (!types_dump) Error("Unable to open `out/types_dump.txt` for writing.");
+        std::ofstream types_dump("output/types_dump.txt");
+        if (!types_dump) Error("Unable to open `output/types_dump.txt` for writing.");
         types_dump << types;
         types_dump.close();
 
-        std::ofstream enums_dump("out/enums_dump.txt");
-        if (!enums_dump) Error("Unable to open `out/enums_dump.txt` for writing.");
+        std::ofstream enums_dump("output/enums_dump.txt");
+        if (!enums_dump) Error("Unable to open `output/enums_dump.txt` for writing.");
         enum_data.PrettyPrint(enums_dump);
         enums_dump.close();
 
-        std::ofstream functions_dump("out/functions_dump.txt");
-        if (!functions_dump) Error("Unable to open `out/functions_dump.txt` for writing.");
+        std::ofstream functions_dump("output/functions_dump.txt");
+        if (!functions_dump) Error("Unable to open `output/functions_dump.txt` for writing.");
         func_data.PrettyPrint(functions_dump);
         functions_dump.close();
 
-        std::ofstream versions_dump("out/versions_dump.txt");
-        if (!versions_dump) Error("Unable to open `out/versions_dump.txt` for writing.");
+        std::ofstream versions_dump("output/versions_dump.txt");
+        if (!versions_dump) Error("Unable to open `output/versions_dump.txt` for writing.");
         version_data.PrettyPrint(versions_dump);
         versions_dump.close();
 
-        std::ofstream extensions_dump("out/extensions_dump.txt");
-        if (!extensions_dump) Error("Unable to open `out/extensions_dump.txt` for writing.");
+        std::ofstream extensions_dump("output/extensions_dump.txt");
+        if (!extensions_dump) Error("Unable to open `output/extensions_dump.txt` for writing.");
         extension_data.PrettyPrint(extensions_dump);
         extensions_dump.close();
     }
@@ -1614,7 +1614,7 @@ int main()
         using namespace Codegen;
 
         { // `generated_types.hpp`
-            OpenFile("out/include/cglfl/generated_types.hpp");
+            OpenFile("output/include/cglfl/generated_types.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
@@ -1644,26 +1644,23 @@ int main()
         }
 
         { // `generated_macros_internal.hpp`
-            OpenFile("out/include/cglfl/generated_macros_internal.hpp");
+            OpenFile("output/include/cglfl/generated_macros_internal.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
 
             NextLine();
 
-            Output("#define CGLFL_FUNCS");
-            for (const std::string &func : selected_version->functions)
-                Output(" \\\n$   ", func);
-            if (compat_profile)
-            {
-                for (const std::string &func : selected_version->functions_deprecated)
-                    Output(" \\\n$   ", func);
-            }
+            Output("#define CGLFL_PRIMARY_FUNC_COUNT ", primary_functions.size(), "\n");
+            Output("#define CGLFL_PRIMARY_FUNCS");
+            for (const auto *func : primary_functions)
+                Output(" \\\n$   ", func->name);
             Output("\n");
 
             NextLine();
 
-            Output("#define CGLFL_EXTS(X)");
+            Output("#define CGLFL_EXT_COUNT ", extensions.size(), "\n");
+            Output("#define CGLFL_EXTS(X)"); // This list should be sorted, to allow binary search.
             if (extensions.empty())
             {
                 Output(" // None");
@@ -1679,6 +1676,7 @@ int main()
             {
                 NextLine();
 
+                Output("#define CGLFL_EXT_FUNC_COUNT_", ext_name, " ", ext.size(), "\n");
                 Output("#define CGLFL_EXT_FUNCS_", ext_name);
                 for (const auto *func : ext)
                     Output(" \\\n$   ", func->name);
@@ -1689,17 +1687,43 @@ int main()
         }
 
         { // `generated_macros_public.hpp`
-            OpenFile("out/include/cglfl/generated_macros_public.hpp");
+            OpenFile("output/include/cglfl/generated_macros_public.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
 
             NextLine();
 
+            // Some generic macros
             Output("#define CGLFL_GL_MAJOR ", selected_version_number.first, "\n");
             Output("#define CGLFL_GL_MINOR ", selected_version_number.second, "\n");
             Output("#define CGLFL_GL_API_", selected_version_variant->name, "\n");
             Output("#define CGLFL_GL_PROFILE_", core_profile ? "core" : compat_profile ? "_compat" : "_none", "\n");
+
+            NextLine();
+
+            // Metaprogramming helpers
+            int max_func_params = 0;
+            for (const auto *func : all_functions)
+                if (max_func_params < int(func->params.size()))
+                    max_func_params = func->params.size();
+            for (int i = 0; i <= max_func_params; i++)
+            {
+                Output("#define CGLFL_IMPL_FOR_EACH_", i, "(m");
+                for (int j = 1; j <= i; j++)
+                    Output(", p", j);
+                if (i == 0)
+                    Output(", ...");
+                Output(")");
+                for (int j = 1; j <= i; j++)
+                    Output(" m(p", j, ")");
+                Output("\n");
+            }
+
+            NextLine();
+
+            // Function count
+            Output("#define CGLFL_FUNC_COUNT ", all_functions.size(), "\n");
 
             NextLine();
 

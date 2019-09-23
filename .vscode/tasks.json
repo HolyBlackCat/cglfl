@@ -15,13 +15,13 @@
         {
             "label": "Build & Run",
             "type": "shell",
-            "command": "make -j4 && ./cglfl",
+            "command": "make -j4 && ./cglfl_generate",
             "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
         },
         {
             "label": "Run",
             "type": "shell",
-            "command": "./cglfl",
+            "command": "./cglfl_generate",
             "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": true},
         },
         {

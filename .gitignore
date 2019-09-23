@@ -1,6 +1,6 @@
-cglfl
-cglfl.exe
-out/*.txt
-out/**/generated_*
+cglfl_generate
+cglfl_generate.exe
+output/*.txt
+output/**/generated_*
 obj/**
 compile_commands.json
