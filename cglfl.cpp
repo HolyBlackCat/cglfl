@@ -38,7 +38,7 @@
 
 namespace data
 {
-    const std::string calling_convention_macro = "GLFL_API";
+    const std::string calling_convention_macro = "CGLFL_API";
 
     const std::vector<std::pair<std::string, std::string>> type_replacements
     {
@@ -48,6 +48,18 @@ namespace data
         {"unsigned short", "std::uint16_t"},
         {"int"           , "std::int32_t" },
         {"unsigned int"  , "std::uint32_t"},
+
+        {"khronos_int8_t"  , "std::int8_t"   },
+        {"khronos_uint8_t" , "std::uint8_t"  },
+        {"khronos_int16_t" , "std::int16_t"  },
+        {"khronos_uint16_t", "std::uint16_t" },
+        {"khronos_int32_t" , "std::int32_t"  },
+        {"khronos_uint32_t", "std::uint32_t" },
+        {"khronos_int64_t" , "std::int64_t"  },
+        {"khronos_uint64_t", "std::uint64_t" },
+        {"khronos_float_t" , "float"         },
+        {"khronos_intptr_t", "std::intptr_t" },
+        {"khronos_ssize_t" , "std::ptrdiff_t"},
     };
 
     const std::string pragma_once = "#pragma once\n\n";
@@ -565,14 +577,6 @@ std::string ExtractTypes(const Element &root_element)
         if (elem.HasAttributeEqualTo("name", "stddef") || elem.HasAttributeEqualTo("name", "khrplatform"))
             continue;
 
-        // Discard ugly preprocessor tricks determining a correct underlying type for 64-bit integers.
-        if (elem.HasAttributeEqualTo("name", "inttypes"))
-            continue;
-
-        // Discard silly typedefs depending on khrplatform.h.
-        if (elem.HasAttributeEqualTo("requires", "khrplatform"))
-            continue;
-
         // Add the type.
         for (const auto &elem : elem.elements)
         {
@@ -605,7 +609,7 @@ std::string ExtractTypes(const Element &root_element)
             ret = std::move(new_ret);
         }
 
-        { // Replace builtin types with standard fixed-size aliases.
+        { // Replace builtin types (and `khronos_*_t` types) with standard fixed-width aliases.
             std::string new_ret;
             const char *ptr = ret.c_str();
 
@@ -1612,14 +1616,53 @@ int main()
             "// API: " + Str(selected_version_variant->name, " ", selected_version_number.first, ".", selected_version_number.second,
                 core_profile ? " (core profile)" : compat_profile ? " (compatibility profile)" : "") + "\n"
             "// Extensions:";
-        for (const auto &[ext_name, ext] : extensions)
-            disclaimer_generated += " " + ext_name;
+
+        if (extensions.empty())
+        {
+            disclaimer_generated += " none";
+        }
+        else
+        {
+            for (const auto &[ext_name, ext] : extensions)
+                disclaimer_generated += " " + ext_name;
+        }
+
         disclaimer_generated += "\n";
 
         using namespace Codegen;
 
-        { // `macros_internal.hpp`
-            OpenFile("out/include/cglfl/macros_internal.hpp");
+        { // `generated_types.hpp`
+            OpenFile("out/include/cglfl/generated_types.hpp");
+
+            Output("#pragma once\n\n");
+            Output(disclaimer_generated);
+
+            NextLine();
+
+            Output("#include <cstddef>\n");
+            Output("#include <cstdint>\n");
+
+            NextLine();
+
+            Output(&R"(
+                #ifndef CGLFL_API
+                #  if defined(__MINGW32__) || defined(__CYGWIN__) || (_MSC_VER >= 800) || defined(_STDCALL_SUPPORTED)
+                #    define CGLFL_API __stdcall
+                #  else
+                #    define CGLFL_API
+                #  endif
+                #endif
+            )"[1]);
+
+            NextLine();
+
+            Output(types);
+
+            CloseFile();
+        }
+
+        { // `generated_macros_internal.hpp`
+            OpenFile("out/include/cglfl/generated_macros_internal.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
@@ -1639,14 +1682,21 @@ int main()
             NextLine();
 
             Output("#define CGLFL_EXTS(X)");
-            for (const auto &[ext_name, ext] : extensions)
-                Output(" \\\n$   X(", ext_name, ")");
+            if (extensions.empty())
+            {
+                Output(" // None");
+            }
+            else
+            {
+                for (const auto &[ext_name, ext] : extensions)
+                    Output(" \\\n$   X(", ext_name, ")");
+            }
             Output("\n");
-
-            NextLine();
 
             for (const auto &[ext_name, ext] : extensions)
             {
+                NextLine();
+
                 Output("#define CGLFL_EXT_FUNCS_", ext_name);
                 for (const auto *func : ext)
                     Output(" \\\n$   ", func->name);
@@ -1656,8 +1706,8 @@ int main()
             CloseFile();
         }
 
-        { // `macros_public.hpp`
-            OpenFile("out/include/cglfl/macros_public.hpp");
+        { // `generated_macros_public.hpp`
+            OpenFile("out/include/cglfl/generated_macros_public.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
@@ -1671,6 +1721,7 @@ int main()
 
             NextLine();
 
+            // Functions
             int max_func_name_len = 0;
             for (const auto *func : all_functions)
                 if (int len = func->name.size(); len > max_func_name_len)
@@ -1691,6 +1742,7 @@ int main()
 
             NextLine();
 
+            // Enums
             int max_enum_name_len = 0;
             for (const auto *en : all_enums)
                 if (int len = en->name.size(); len > max_enum_name_len)
