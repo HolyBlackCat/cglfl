@@ -1,3 +1,7 @@
+// CGLFL (configurable OpenGL function loader)
+//   by Egor Mikhailov <blckcat@inbox.ru>
+// License: zlib
+
 #include <algorithm>
 #include <array>
 #include <cstdio>

@@ -1332,7 +1332,7 @@ namespace Codegen
 }
 
 
-int main()
+int main(int argc, char **argv)
 {
     std::cout << "Loading `gl.xml`\n";
     std::string source = LoadFile("gl.xml");
@@ -1405,6 +1405,17 @@ int main()
     }
     #endif
 
+    std::vector<std::string> command_line_params;
+    for (int i = 1; i < argc; i++)
+        command_line_params.push_back(argv[i]);
+
+    const bool interactive_mode = command_line_params.empty();
+    if (interactive_mode)
+        std::cout << "\nRunning in interactive mode!\n\n";
+
+
+    std::string param_gl_version, param_gl_profile;
+
     const Version *selected_version = 0;
     const Variant *selected_version_variant = 0;
     std::pair<int, int> selected_version_number;
@@ -1416,7 +1427,6 @@ int main()
 
     std::map<std::string, std::vector<const Function *>> extensions; // Note that a single function can belong to several extensions, and maybe also to some versions.
 
-
     { // Get user input
         { // Ask for api version
             auto VersionName = [](const Variant &variant, const std::pair<int, int> &version_number) -> std::string
@@ -1424,23 +1434,36 @@ int main()
                 return Str(variant.name, version_number.first, ".", version_number.second);
             };
 
-            std::cout << "\nFound following versions:\n ";
-            for (const Variant &variant : version_data.variants)
-            for (const auto &[number, version] : variant.versions)
-                std::cout << ' ' << VersionName(variant, number);
-            std::cout << "\n";
+            if (interactive_mode)
+            {
+                std::cout << "Found following versions:\n ";
+                for (const Variant &variant : version_data.variants)
+                for (const auto &[number, version] : variant.versions)
+                    std::cout << ' ' << VersionName(variant, number);
+                std::cout << "\n";
+            }
 
             while (1)
             {
-                std::cout << "Select a version: ";
-                std::string version_name = ReadString();
+                if (interactive_mode)
+                {
+                    std::cout << "Select a version: ";
+                    param_gl_version = ReadString();
+                }
+                else
+                {
+                    if (command_line_params.empty())
+                        Error("Not enough command line arguments, no version specified.");
+                    param_gl_version = command_line_params.front();
+                    command_line_params.erase(command_line_params.begin());
+                }
 
                 bool found = 0;
                 for (const Variant &variant : version_data.variants)
                 {
                     for (const auto &[number, version] : variant.versions)
                     {
-                        if (version_name == VersionName(variant, number))
+                        if (param_gl_version == VersionName(variant, number))
                         {
                             found = 1;
                             selected_version = &version;
@@ -1456,8 +1479,15 @@ int main()
 
                 if (!found)
                 {
-                    std::cout << "No such version.\n";
-                    continue;
+                    if (interactive_mode)
+                    {
+                        std::cout << "No such version.\n";
+                        continue;
+                    }
+                    else
+                    {
+                        Error("No such version: " + param_gl_version);
+                    }
                 }
 
                 break;
@@ -1467,17 +1497,37 @@ int main()
         { // Ask for api profile (core or compat) if necessary
             if (selected_version->enums_deprecated.size() > 0 || selected_version->functions_deprecated.size() > 0)
             {
-                std::cout << "Available profiles:\n  core compat\n";
+                if (interactive_mode)
+                    std::cout << "Available profiles:\n  core compat\n";
+
                 while (1)
                 {
-                    std::cout << "Select a profile: ";
-                    std::string profile = ReadString();
-                    bool is_core = profile == "core";
-                    bool is_compat = profile == "compat";
+                    if (interactive_mode)
+                    {
+                        std::cout << "Select a profile: ";
+                        param_gl_profile = ReadString();
+                    }
+                    else
+                    {
+                        if (command_line_params.empty())
+                            Error("Not enough command line arguments, no profile specified.");
+                        param_gl_profile = command_line_params.front();
+                        command_line_params.erase(command_line_params.begin());
+                    }
+
+                    bool is_core = param_gl_profile == "core";
+                    bool is_compat = param_gl_profile == "compat";
                     if (!is_core && !is_compat)
                     {
-                        std::cout << "No such profile.\n";
-                        continue;
+                        if (interactive_mode)
+                        {
+                            std::cout << "No such profile.\n";
+                            continue;
+                        }
+                        else
+                        {
+                            Error("No such profile: " + param_gl_profile);
+                        }
                     }
 
                     core_profile = is_core;
@@ -1515,19 +1565,40 @@ int main()
         std::set<std::string> selected_extensions;
 
         { // Ask for extension lists
-            std::cout << "Found following extensions:\n ";
-            for (const auto &[name, ext] : extension_data.extensions)
-                std::cout << ' ' << name;
-            std::cout << "\n";
+            if (interactive_mode)
+            {
+                std::cout << "Found following extensions:\n ";
+                for (const auto &[name, ext] : extension_data.extensions)
+                    std::cout << ' ' << name;
+                std::cout << "\n";
+            }
 
             while (1)
             {
-                if (selected_extensions.size() > 0)
-                    std::cout << "Any more extensions? ";
-                else
-                    std::cout << "What extensions do you want, if any? ";
+                if (interactive_mode)
+                {
+                    if (selected_extensions.size() > 0)
+                        std::cout << "Any more extensions? ";
+                    else
+                        std::cout << "What extensions do you want, if any? ";
+                }
 
-                std::string input_str = ReadString();
+                std::string input_str;
+                if (interactive_mode)
+                {
+                    input_str = ReadString();
+                }
+                else
+                {
+                    for (const auto &param : command_line_params)
+                    {
+                        if (!input_str.empty())
+                            input_str += " ";
+                        input_str += param;
+                    }
+                }
+
+
                 if (input_str.empty())
                     break;
 
@@ -1539,16 +1610,30 @@ int main()
                     if (found)
                     {
                         bool inserted = selected_extensions.insert(ext_name).second;
-                        if (inserted)
-                            std::cout << "Added `" << ext_name << "`.\n";
+                        if (interactive_mode)
+                        {
+                            if (inserted)
+                                std::cout << "Added `" << ext_name << "`.\n";
+                            else
+                                std::cout << "Skipping `" << ext_name << "` (already added).\n";
+                        }
                         else
-                            std::cout << "Skipping `" << ext_name << "` (already added).\n";
+                        {
+                            if (!inserted)
+                                Error("Extension specified more than once: " + ext_name);
+                        }
                     }
                     else
                     {
-                        std::cout << "Skipping `" << ext_name << "` (not found).\n";
+                        if (interactive_mode)
+                            std::cout << "Skipping `" << ext_name << "` (not found).\n";
+                        else
+                            Error("Extension not found: " + ext_name);
                     }
                 }
+
+                if (!interactive_mode)
+                    break;
             }
         }
 
@@ -1774,7 +1859,18 @@ int main()
         }
     }
 
-    std::cout << "Done!\n";
+    std::cout << "\nDone!\n";
+
+    if (interactive_mode)
+    {
+        std::cout << "\n"
+                     "You can use following command to generate the same configuraion in a non-interactive mode:\n"
+                     "./cglfl_generate " << param_gl_version << (core_profile ? " core" : compat_profile ? " compat" : "");
+
+        for (const auto &[ext_name, ext] : extensions)
+            std::cout << " " << ext_name;
+        std::cout << "\n";
+    }
 
     return 0;
 }

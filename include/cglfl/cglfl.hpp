@@ -1,5 +1,9 @@
 #pragma once
 
+// CGLFL (configurable OpenGL function loader)
+//   by Egor Mikhailov <blckcat@inbox.ru>
+// License: zlib
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
