@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <cglfl/cglfl.hpp>
-#include <cglfl/generated_macros_internal.hpp>
+#include <cglfl_generated/macros_internal.hpp>
 
 namespace cglfl
 {
@@ -104,7 +104,7 @@ namespace cglfl
     {
         log_func_t log_func = [](const char *str)
         {
-            std::fprintf(stderr, "%s\n", str);
+            std::printf("%s\n", str);
         };
 
         void log(const char *string)
@@ -141,13 +141,18 @@ namespace cglfl
                         case GL_INVALID_ENUM:                  message += "invalid enum";                  break;
                         case GL_INVALID_VALUE:                 message += "invalid value";                 break;
                         case GL_INVALID_OPERATION:             message += "invalid operation";             break;
-                        case GL_INVALID_FRAMEBUFFER_OPERATION: message += "invalid framebuffer operation"; break;
                         case GL_OUT_OF_MEMORY:                 message += "out of memory";                 break;
+                        #ifdef GL_INVALID_FRAMEBUFFER_OPERATION
+                        case GL_INVALID_FRAMEBUFFER_OPERATION: message += "invalid framebuffer operation"; break;
+                        #endif
                         #ifdef GL_STACK_UNDERFLOW
                         case GL_STACK_UNDERFLOW:               message += "stack underflow";               break;
                         #endif
                         #ifdef GL_STACK_OVERFLOW
                         case GL_STACK_OVERFLOW:                message += "stack overflow";                break;
+                        #endif
+                        #ifdef GL_TABLE_TOO_LARGE
+                        case GL_TABLE_TOO_LARGE:               message += "table too large";               break;
                         #endif
                         default:                               message += "???";                           break;
                     }

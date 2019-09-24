@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -1345,6 +1346,7 @@ int main()
     #if 1
     { // Dump XML tree
         std::cout << "Dumping XML tree\n";
+        std::filesystem::create_directory("output");
         std::ofstream xml_tree_dump("output/xml_tree_dump.txt");
         if (!xml_tree_dump) Error("Unable to open `output/xml_tree_dump.txt` for writing.");
         root_element.PrettyPrint(xml_tree_dump);
@@ -1374,6 +1376,8 @@ int main()
     std::cout << "Dumping data\n";
     #if 1
     { // Dump more data
+        std::filesystem::create_directory("output");
+
         std::ofstream types_dump("output/types_dump.txt");
         if (!types_dump) Error("Unable to open `output/types_dump.txt` for writing.");
         types_dump << types;
@@ -1611,10 +1615,15 @@ int main()
 
         disclaimer_generated += "\n";
 
+        std::string data_dir = Str("include/cglfl_",
+                                   selected_version_variant->name, selected_version_number.first, ".", selected_version_number.second,
+                                   core_profile ? "_core" : compat_profile ? "_compat" : "", "/cglfl_generated/");
+        std::filesystem::create_directories(data_dir);
+
         using namespace Codegen;
 
-        { // `generated_types.hpp`
-            OpenFile("output/include/cglfl/generated_types.hpp");
+        { // `types.hpp`
+            OpenFile(data_dir + "types.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
@@ -1643,8 +1652,8 @@ int main()
             CloseFile();
         }
 
-        { // `generated_macros_internal.hpp`
-            OpenFile("output/include/cglfl/generated_macros_internal.hpp");
+        { // `macros_internal.hpp`
+            OpenFile(data_dir + "macros_internal.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
@@ -1686,8 +1695,8 @@ int main()
             CloseFile();
         }
 
-        { // `generated_macros_public.hpp`
-            OpenFile("output/include/cglfl/generated_macros_public.hpp");
+        { // `macros_public.hpp`
+            OpenFile(data_dir + "macros_public.hpp");
 
             Output("#pragma once\n\n");
             Output(disclaimer_generated);
@@ -1698,7 +1707,7 @@ int main()
             Output("#define CGLFL_GL_MAJOR ", selected_version_number.first, "\n");
             Output("#define CGLFL_GL_MINOR ", selected_version_number.second, "\n");
             Output("#define CGLFL_GL_API_", selected_version_variant->name, "\n");
-            Output("#define CGLFL_GL_PROFILE_", core_profile ? "core" : compat_profile ? "_compat" : "_none", "\n");
+            Output("#define CGLFL_GL_PROFILE_", core_profile ? "core" : compat_profile ? "compat" : "none", "\n");
 
             NextLine();
 

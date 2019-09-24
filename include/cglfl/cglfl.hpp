@@ -8,9 +8,9 @@
 #include <type_traits>
 
 #include "config.hpp"
-#include "generated_macros_public.hpp"
-#include "generated_types.hpp"
 #include "macros.hpp"
+#include <cglfl_generated/macros_public.hpp>
+#include <cglfl_generated/types.hpp>
 
 namespace cglfl
 {
@@ -47,7 +47,7 @@ namespace cglfl
     {
         // Logs go here, one line at a time (without '\n' symbols).
         using log_func_t = std::function<void(const char *)>;
-        extern log_func_t log_func; // Writes to `stderr` by default.
+        extern log_func_t log_func; // Writes to `stdout` by default.
 
         // Uses `log_func` to write a string to the log.
         void log(const char *string);
