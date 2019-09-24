@@ -1703,6 +1703,7 @@ int main()
             NextLine();
 
             // Metaprogramming helpers
+            Output("#define CGLFL_IMPL_FOR_EACH(m, n, ...) CGLFL_IMPL_CAT(CGLFL_IMPL_FOR_EACH_, n)(m, __VA_ARGS__)\n");
             int max_func_params = 0;
             for (const auto *func : all_functions)
                 if (max_func_params < int(func->params.size()))

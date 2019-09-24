@@ -36,7 +36,7 @@
     { \
         ::cglfl::debug::log(#func); \
         ::cglfl::debug::log("    :: at " __FILE__ " : " CGLFL_IMPL_STR(__LINE__)); \
-        CGLFL_IMPL_CALL(CGLFL_IMPL_CAT(CGLFL_IMPL_FOR_EACH_, n), CGLFL_DEBUG_PRINT_PARAM, CGLFL_IMPL_IDENTITY param_names) \
+        CGLFL_IMPL_FOR_EACH(CGLFL_DEBUG_PRINT_PARAM, n, CGLFL_IMPL_IDENTITY param_names) \
     }
 #define CGLFL_DEBUG_PRINT_RET(i, func, ret, n, param_names, params) \
     CGLFL_IMPL_NOT_VOID(ret, \
