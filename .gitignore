@@ -4,3 +4,4 @@ output/
 include/cglfl_*/
 obj/**
 compile_commands.json
+.clangd/**
